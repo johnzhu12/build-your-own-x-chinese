@@ -3,7 +3,7 @@
 1.偶然发现一个很酷的项目[build your own x](https://github.com/danistefanovic/build-your-own-x/blob/master/README.md)
    
    以前阅读过一本书，叫buid your own angularjs,收益匪浅。
-   对于那些喜欢研究轮子，研究框架原理的开发者，这个系列简直太棒！
+   对于那些喜欢研究轮子的，这个系列简直太棒！
 
 
    所以翻译部分文章，
