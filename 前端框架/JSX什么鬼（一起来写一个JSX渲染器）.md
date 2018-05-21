@@ -5,7 +5,7 @@
 
 ##注解
 
-  你在每个文件和每个函数里定义这个，告诉转译器（如：Babel）每个节点在运行时阶段需要调用的函数名。
+  你在每个文件和每个函数里定义这个，告诉转译器（如：Babel）每个节点在运行时阶段需要调用的函数名。
 
   在下面的例子里，我们称之为“对每个节点，插入调用h()函数的回调”
 
@@ -38,7 +38,7 @@
 ##我们来写个jsx渲染器
  首先，我们要定义下我们转换的代码调用的h()函数。
 
- 你可以把这个函数命名为任何名字，我之所以用h(),是因为在[hypescript](https://github.com/hyperhype/hyperscript)里这种类型的‘build’函数就是这么称呼的
+ 你可以把这个函数命名为任何名字，我之所以用h(),是因为在[hypescript](https://github.com/hyperhype/hyperscript)里这种类型的‘build’函数就是这么称呼的
  ```javascript
   function h(nodeName, attributes, ...args) {  
       let children = args.length ? [].concat(...args) : null;
@@ -47,4 +47,5 @@
  ```
 好了，就是这么简单
  你不熟悉ES6/ES2005？
+ 
  1.参数中的'...'操作符,
