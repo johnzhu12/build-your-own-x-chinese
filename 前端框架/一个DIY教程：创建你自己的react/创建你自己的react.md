@@ -47,15 +47,31 @@
  ```js
    const rootDom = document.getElementById("root");
 
-function tick() {
-  const time = new Date().toLocaleTimeString();
-  const clockElement = <h1>{time}</h1>;
-  render(clockElement, rootDom);
-}
+  function tick() {
+    const time = new Date().toLocaleTimeString();
+    const clockElement = <h1>{time}</h1>;
+    render(clockElement, rootDom);
+  }
 
-tick();
-setInterval(tick, 1000);
+  tick();
+  setInterval(tick, 1000);
  ```
- 我们现在的render方法还做不到。它不会为每个tick更新之前同一个的div,相反它会新添一个新的div.
+ 我们现在的render方法还做不到这个。它不会为每个tick更新之前同一个的div,相反它会新添一个新的div.第一种解决办法是每一次更新,替换掉div.在render方法的最下面，我们检查父元素是否有子元素，如果有，我们就用新元素生产的dom替换它：
+ ```js
+    function render(element, parentDom) {  
+  
+  // ...
+  // Create dom from element
+  // ...
+  
+  // Append or replace dom
+  if (!parentDom.lastChild) {
+    parentDom.appendChild(dom);     
+  } else {
+    parentDom.replaceChild(dom, parentDom.lastChild);    
+  }
+}  
+ ```
+ 在这个小列子里，这个办法很有效。但在复杂情况下，这种重复创建所有子节点的方式并不可取。所以我们需要一种方式，来对比当前和之前的元素树之间的区别。最后只更新不同的地方。
 #5.组件和状态(state)
 #6.Fiber:增强的调和
