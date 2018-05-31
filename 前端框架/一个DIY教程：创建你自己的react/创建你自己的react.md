@@ -36,6 +36,10 @@
 >我好奇如果不考虑性能和设备兼容性，POSIX(可移植操作系统接口)核心可以实现得多么小而简单。
 — @ID_AA_Carmack
 
+&emsp;&emsp;&emsp;&emsp;&ensp;&nbsp;我对react也这么想
+
+
+
 
 #2.渲染dom元素
 ##2.1
