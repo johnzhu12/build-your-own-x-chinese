@@ -163,7 +163,20 @@ domRoot.appendChild(domText);
   </div>
   ```
 
-  Didact元素和[react元素](https://reactjs.org/blog/2014/10/14/introducing-react-elements.html)很像
+  Didact元素和[react元素](https://reactjs.org/blog/2014/10/14/introducing-react-elements.html)很像，但是不像react那样，创建元素就和创建js对象一样，你可能使用JSX或者createElement.Didatc我们也这么做，不过在后面再加上create元素的代码
+
+##2.3 渲染dom元素
+   下一步是渲染一个元素以及它的children到dom里。我们将写一个render方法(对应于react的[ReactDOM.render](https://reactjs.org/docs/react-dom.html#render))，它接受一个元素和一个dom 容器。然后根据元素的定义生成dom树,附加到容器里。
+
+   ```js
+    function render(element, parentDom) {
+    const { type, props } = element;
+    const dom = document.createElement(type);
+    const childElements = props.children || [];
+    childElements.forEach(childElement => render(childElement, dom));
+    parentDom.appendChild(dom);
+  }
+   ```
 
 
 
