@@ -9,7 +9,11 @@
 * [2.渲染dom元素](#2渲染dom元素)
 	* [2.1 什么是DOM](#21-什么是dom)
 	* [2.2 Didact元素](#22-didact元素)
+	* [2.3 渲染dom元素](#23-渲染dom元素)
+	* [2.4 渲染DOM文本节点](#24-渲染dom文本节点)
+	* [2.5 总结](#25-总结)
 * [3.JSX和创建元素](#3jsx和创建元素)
+	* [3.1 JSX](#31-jsx)
 * [4.虚拟DOM和调和过程](#4虚拟dom和调和过程)
 * [5.组件和状态(state)](#5组件和状态state)
 * [6.Fiber:增量调和](#6fiber增量调和)
@@ -18,9 +22,9 @@
 
 #1.(Didact)一个DIY教程:创建你自己的react
 
-[更新]这个系列从老的react架构写起，你可以跳过前面直接到文章：[所有地方使用新的fiber架构重写](https://engineering.hexacta.com/didact-fiber-incremental-reconciliation-b2fe028dcaec)
+[更新]这个系列从老的react架构写起，你可以跳过前面直接到，使用新的fiber架构重写的：[文章](https://engineering.hexacta.com/didact-fiber-incremental-reconciliation-b2fe028dcaec)
 
-[更新2]听Dan的没错，我是认真的
+[更新2]听Dan的没错，我是认真的☺
 
 >这篇深入fiber架构的文章真的很棒。
 — @dan_abramov
@@ -28,11 +32,11 @@
 
 ## 1.1 引言
 
-很久以前，当我学数据结构和算法时，我有个作业就是实现自己的数组，链表，队列，和栈（用Modula-2语言）。那之后，我再也没有过要自己来实现链表的需求。总会有库让我不需要自己重新造轮子。
+很久以前，当学数据结构和算法时，我有个作业就是实现自己的数组，链表，队列，和栈（用Modula-2语言）。那之后，我再也没有过要自己来实现链表的需求。总会有库让我不需要自己重造轮子。
 
-所以，那个作业有意义吗？当然，我从中学到了很多，知道如何合理使用各种数据结构，并知道根据场景合理选用它们。
+所以，那个作业还有意义吗？当然，我从中学到了很多，知道如何合理使用各种数据结构，并知道根据场景合理选用它们。
 
-这个系列文章的目的（[以及对应的仓库](https://github.com/hexacta/didact/)）也是一样，不过要实现的是我们现在用的比链表更多的东西：React
+这个系列文章的目的以及对应的（[仓库](https://github.com/hexacta/didact/)）也是一样，不过要实现的是一个，我们使用比链表更多的东西：React
 
 >我好奇如果不考虑性能和设备兼容性，POSIX(可移植操作系统接口)核心可以实现得多么小而简单。
 — @ID_AA_Carmack
@@ -41,7 +45,7 @@
 
 幸运的是,如果不考虑性能，调试，平台兼容性等等，react的主要3，4个特性重写并不难。事实上，它们很简单，甚至只要不足200行代码
 
-这就是我们接下来要做的事，用不到200行代码写一个有一样的API,能跑的React。因为这个库的说教性(didactic)，我们称之为Didact
+这就是我们接下来要做的事，用不到200行代码写一个有一样的API,能跑的React。因为这个库的说教性(didactic)特点，我们打算就称之为Didact
 
 用Didact写的应用如下：
 ```js
@@ -103,7 +107,7 @@ Didact.render(<App stories={stories} />, document.getElementById("root"));
 * [组件和状态(state)](#5组件和状态state)
 * [Fiber:增量调和](#6fiber增量调和)
 
-这个系列暂时不讲的：
+这个系列暂时不讲的地方：
 * Functional components 
 * Context（上下文）
 * 生命周期方法
@@ -111,7 +115,7 @@ Didact.render(<App stories={stories} />, document.getElementById("root"));
 * 通过key的调和过程（这里只讲根据子节点的顺序）
 * 其他渲染 （只支持DOM）
 * 旧浏览器支持
->你可以从[react实现笔记](https://reactjs.org/docs/implementation-notes.html)，，[Paul O’Shannessy](https://medium.com/@zpao)的这个youtube[演讲视频](https://www.youtube.com/watch?v=_MAD4Oly9yg),或者react[仓库地址](https://github.com/facebook/react),找到更多关于如何实现react的细节.
+>你可以从[react实现笔记](https://reactjs.org/docs/implementation-notes.html)，[Paul O’Shannessy](https://medium.com/@zpao)的这个youtube[演讲视频](https://www.youtube.com/watch?v=_MAD4Oly9yg),或者react[仓库地址](https://github.com/facebook/react),找到更多关于如何实现react的细节.
 #2.渲染dom元素
 ##2.1 什么是DOM
  开始之前，让我们回想一下，我们经常使用的DOM API
@@ -163,7 +167,7 @@ domRoot.appendChild(domText);
   </div>
   ```
 
-  Didact元素和[react元素](https://reactjs.org/blog/2014/10/14/introducing-react-elements.html)很像，但是不像react那样，创建元素就和创建js对象一样，你可能使用JSX或者createElement.Didatc我们也这么做，不过在后面再加上create元素的代码
+  Didact元素和[react元素](https://reactjs.org/blog/2014/10/14/introducing-react-elements.html)很像，但是不像react那样，你可能使用JSX或者createElement，创建元素就和创建js对象一样.Didatc我们也这么做，不过在后面章节我们再加上create元素的代码
 
 ##2.3 渲染dom元素
    下一步是渲染一个元素以及它的children到dom里。我们将写一个render方法(对应于react的[ReactDOM.render](https://reactjs.org/docs/react-dom.html#render))，它接受一个元素和一个dom 容器。然后根据元素的定义生成dom树,附加到容器里。
@@ -177,10 +181,129 @@ domRoot.appendChild(domText);
     parentDom.appendChild(dom);
   }
    ```
+我们仍然没有对其添加属性和事件监听。现在让我们使用object.keys来遍历props属性，设置对应的值：
+```js
+function render(element, parentDom) {
+  const { type, props } = element;
+  const dom = document.createElement(type);
 
+  const isListener = name => name.startsWith("on");
+  Object.keys(props).filter(isListener).forEach(name => {
+    const eventType = name.toLowerCase().substring(2);
+    dom.addEventListener(eventType, props[name]);
+  });
 
+  const isAttribute = name => !isListener(name) && name != "children";
+  Object.keys(props).filter(isAttribute).forEach(name => {
+    dom[name] = props[name];
+  });
 
+  const childElements = props.children || [];
+  childElements.forEach(childElement => render(childElement, dom));
+
+  parentDom.appendChild(dom);
+}
+```
+##2.4 渲染DOM文本节点
+现在render函数不支持的就是文本节点，首先我们定义文本元素什么样子，比如，在react中描述\<span>Foo\</span>：
+```js
+const reactElement = {
+  type: "span",
+  props: {
+    children: ["Foo"]
+  }
+};
+```
+注意到子节点，只是一个字符串，并不是其他元素对象。这就让我们的Didact元素定义不合适了：children元素应该是一个数组，数组里的元素都有type和props属性。如果我们遵守这个规则，后面将减少不必要的if判断.所以，Didact文本元素应该有一个“TEXT ELEMENT”的类型，并且有在对应的节点有文本的值。比如：
+```js
+const textElement = {
+  type: "span",
+  props: {
+    children: [
+      {
+        type: "TEXT ELEMENT",
+        props: { nodeValue: "Foo" }
+      }
+    ]
+  }
+};
+```
+现在我们来定义文本元素应该如何渲染。不同的是，文本元素不使用createElement方法，而用createTextNode代替。节点值就和其他属性一样被设置上去。
+```js
+function render(element, parentDom) {
+  const { type, props } = element;
+
+  // Create DOM element
+  const isTextElement = type === "TEXT ELEMENT";
+  const dom = isTextElement
+    ? document.createTextNode("")
+    : document.createElement(type);
+
+  // Add event listeners
+  const isListener = name => name.startsWith("on");
+  Object.keys(props).filter(isListener).forEach(name => {
+    const eventType = name.toLowerCase().substring(2);
+    dom.addEventListener(eventType, props[name]);
+  });
+
+  // Set properties
+  const isAttribute = name => !isListener(name) && name != "children";
+  Object.keys(props).filter(isAttribute).forEach(name => {
+    dom[name] = props[name];
+  });
+
+  // Render children
+  const childElements = props.children || [];
+  childElements.forEach(childElement => render(childElement, dom));
+
+  // Append to parent
+  parentDom.appendChild(dom);
+}
+```
+##2.5 总结
+我们现在创建了一个可以渲染元素以及子元素的render方法。后面我们需要如何创建元素。我们将在下节讲到如何使JSX和Didact很好地融合。
 #3.JSX和创建元素
+##3.1 JSX
+我们之前讲到了[Didact元素](#2渲染dom元素),很繁琐地讲到如何渲染到DOM.这一节我们来看看如何使用JSX简化创建元素。
+
+JSX提供了一些创建元素的语法糖，不用使用下面的代码：
+```js
+const element = {
+  type: "div",
+  props: {
+    id: "container",
+    children: [
+      { type: "input", props: { value: "foo", type: "text" } },
+      {
+        type: "a",
+        props: {
+          href: "/bar",
+          children: [{ type: "TEXT ELEMENT", props: { nodeValue: "bar" } }]
+        }
+      },
+      {
+        type: "span",
+        props: {
+          onClick: e => alert("Hi"),
+          children: [{ type: "TEXT ELEMENT", props: { nodeValue: "click me" } }]
+        }
+      }
+    ]
+  }
+};
+```
+我们现在可以这么写：
+```js
+const element = (
+  <div id="container">
+    <input value="foo" type="text" />
+    <a href="/bar">bar</a>
+    <span onClick={e => alert("Hi")}>click me</span>
+  </div>
+);
+```
+如果你不熟悉JSX的话，你可能怀疑下面的代码是否是合法的js--它确实不是。要让浏览器理解它，上面的代码必须使用预处理工具处理。比如babel.babel会把上面的代码转成下面这样：
+
 #4.虚拟DOM和调和过程
  到目前为止，我们基于JSX的描述方式实现了dom元素的创建机制。这里开始，我们专注于怎么更新DOM.
 
