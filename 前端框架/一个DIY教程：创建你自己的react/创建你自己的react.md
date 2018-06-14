@@ -261,10 +261,10 @@ function render(element, parentDom) {
 }
 ```
 ##2.5 总结
-我们现在创建了一个可以渲染元素以及子元素的render方法。后面我们需要如何创建元素。我们将在下节讲到如何使JSX和Didact很好地融合。
+我们现在创建了一个可以渲染元素以及子元素的render方法。后面我们需要实现如何创建元素。我们将在下节讲到如何使JSX和Didact很好地融合。
 #3.JSX和创建元素
 ##3.1 JSX
-我们之前讲到了[Didact元素](#2渲染dom元素),很繁琐地讲到如何渲染到DOM.这一节我们来看看如何使用JSX简化创建元素。
+我们之前讲到了[Didact元素](#2渲染dom元素),讲到如何渲染到DOM，用一种很繁琐的方式.这一节我们来看看如何使用JSX简化创建元素的过程。
 
 JSX提供了一些创建元素的语法糖，不用使用下面的代码：
 ```js
@@ -303,6 +303,57 @@ const element = (
 );
 ```
 如果你不熟悉JSX的话，你可能怀疑下面的代码是否是合法的js--它确实不是。要让浏览器理解它，上面的代码必须使用预处理工具处理。比如babel.babel会把上面的代码转成下面这样：
+```js
+const element = createElement(
+  "div",
+  { id: "container" },
+  createElement("input", { value: "foo", type: "text" }),
+  createElement(
+    "a",
+    { href: "/bar" },
+    "bar"
+  ),
+  createElement(
+    "span",
+    { onClick: e => alert("Hi") },
+    "click me"
+  )
+);
+```
+支持JSX我们只要在Didact里添加一个createElement方法。其他事的交给预处理器去做。这个方法的第一个参数是元素的类型type,第二个是含有props属性的对象，剩下的参数都是子节点children。createElement方法需要创建一个对象，并把第二个参数上所有的值赋给它，把第二个参数后面的所有参数放到一个数组，并设置到children属性上，最后返回一个有type和props的对象。用代码实现很容易：
+```js
+function createElement(type, config, ...args) {
+  const props = Object.assign({}, config);
+  const hasChildren = args.length > 0;
+  props.children = hasChildren ? [].concat(...args) : [];
+  return { type, props };
+}
+```
+同样，这个方法对文本元素不适用。文本的子元素是作为字符串传给createElement方法的。但是我们的Didact需要文本元素一样有type和props属性。所以我们要把不是didact元素的参数都转成一个'文本元素'
+```js
+ const TEXT_ELEMENT = "TEXT ELEMENT";
+
+function createElement(type, config, ...args) {
+  const props = Object.assign({}, config);
+  const hasChildren = args.length > 0;
+  const rawChildren = hasChildren ? [].concat(...args) : [];
+  props.children = rawChildren
+    .filter(c => c != null && c !== false)
+    .map(c => c instanceof Object ? c : createTextElement(c));
+  return { type, props };
+}
+
+function createTextElement(value) {
+  return createElement(TEXT_ELEMENT, { nodeValue: value });
+}
+```
+我同样从children列表里过滤了null，undefined,false参数。我们不需要把它们加到props.children上因为我们根本不会去渲染它们。
+##3.2总结
+到这里我们并没有为Didact加特殊的功能.但是我们有了更好的开发体验，因为我们可以使用JSX来定义元素。我已经更新了[codepen](https://codepen.io/pomber/pen/xdmoWE?editors=0010)上的代码。因为codepen用babel转译JSX,所以以/** @jsx createElement */开头的注释都是为了让babel知道使用哪个函数。
+
+你同样可以查看[github提交](https://github.com/hexacta/didact/commit/15010f8e7b8b54841d1e2dd9eacf7b3c06b1a24b)
+
+下面我们将介绍Didact用来更新dom的虚拟dom和所谓的调和算法.
 
 #4.虚拟DOM和调和过程
  到目前为止，我们基于JSX的描述方式实现了dom元素的创建机制。这里开始，我们专注于怎么更新DOM.
@@ -337,5 +388,9 @@ const element = (
 }  
  ```
  在这个小列子里，这个办法很有效。但在复杂情况下，这种重复创建所有子节点的方式并不可取。所以我们需要一种方式，来对比当前和之前的元素树之间的区别。最后只更新不同的地方。
+ ##4.1 虚拟DOM和调和过程
+ React把这种diff过程称之为[调和过程](https://reactjs.org/docs/reconciliation.html)，我们现在也这么称呼它。首先我们要保存之前的渲染树，从而可以和新的树对比。换句话说，我们将实现自己的DOM,虚拟dom.
+
+ 这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题
 #5.组件和状态(state)
 #6.Fiber:增量调和

@@ -139,7 +139,7 @@ document.body.appendChild(list);
 ```
 ##合在一起
 
-这里是我们虚拟DOM渲染的完整版，有样式的CodePen版本在下面
+这里是我们虚拟DOM渲染的完整版，下面的是CodePen上有样式的版本
 ```javascript
 const ITEMS = 'hello there people'.split(' ');
 
