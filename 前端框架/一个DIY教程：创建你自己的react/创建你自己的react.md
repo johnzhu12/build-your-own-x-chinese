@@ -391,6 +391,6 @@ function createTextElement(value) {
  ##4.1 虚拟DOM和调和过程
  React把这种diff过程称之为[调和过程](https://reactjs.org/docs/reconciliation.html)，我们现在也这么称呼它。首先我们要保存之前的渲染树，从而可以和新的树对比。换句话说，我们将实现自己的DOM,虚拟dom.
 
- 这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题
+ 这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题,一个是为了是调和过程容易些，我们必须为每个虚拟dom保存一个对真实dom的引用，并且我们更希望元素都不可变(imumutable).
 #5.组件和状态(state)
 #6.Fiber:增量调和
