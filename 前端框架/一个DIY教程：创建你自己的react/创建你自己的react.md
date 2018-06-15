@@ -14,6 +14,7 @@
 	* [2.5 总结](#25-总结)
 * [3.JSX和创建元素](#3jsx和创建元素)
 	* [3.1 JSX](#31-jsx)
+	* [3.2总结](#32总结)
 * [4.虚拟DOM和调和过程](#4虚拟dom和调和过程)
 * [5.组件和状态(state)](#5组件和状态state)
 * [6.Fiber:增量调和](#6fiber增量调和)
@@ -391,6 +392,68 @@ function createTextElement(value) {
  ##4.1 虚拟DOM和调和过程
  React把这种diff过程称之为[调和过程](https://reactjs.org/docs/reconciliation.html)，我们现在也这么称呼它。首先我们要保存之前的渲染树，从而可以和新的树对比。换句话说，我们将实现自己的DOM,虚拟dom.
 
- 这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题,一个是为了是调和过程容易些，我们必须为每个虚拟dom保存一个对真实dom的引用，并且我们更希望元素都不可变(imumutable).
+ 这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题,一个是为了是调和过程容易些，我们必须为每个虚拟dom保存一个对真实dom的引用，并且我们更希望元素都不可变(imumutable).第二个问问题是后面我们要支持组件，组件有自己的状态(state),我们的元素还不能处理那种。
+ ##4.2 实例(instance)
+ 所以我们要介绍一个新的名词：实例。实例代表的已经渲染到DOM中的元素。它其实是一个有着，element,dom,chilInstances属性的JS普通对象。childInstances是有着该元素所以子元素实例的数组。
+
+> 注意我们这里提到的实例和[Dan Abramov](https://medium.com/@dan_abramov)在[react组件，元素和实列](https://medium.com/@dan_abramov/react-components-elements-and-instances-90800811f8ca)这篇文章提到实例不是一个东西。他指的是React调用继承于React.component的那些类的构造函数所获得的‘公共实例’(public instances)。我们会在以后把公共实例加上。
+
+ 每一个DOM节点都有一个相应的实例。调和算法的一个目标就是尽量避免创建和删除实例。创建删除实例意味着我们在修改DOM，所以重复利用实例就是越少地修改dom树。
+
+ ##4.3 重构
+ 我们来重写render方法，保留同样健壮的调和算法，添加一个实例化方法来根据给定的元素生成一个实例（包括其子元素）
+ ```js
+ let rootInstance = null;
+
+function render(element, container) {
+  const prevInstance = rootInstance;
+  const nextInstance = reconcile(container, prevInstance, element);
+  rootInstance = nextInstance;
+}
+
+function reconcile(parentDom, instance, element) {
+  if (instance == null) {
+    const newInstance = instantiate(element);
+    parentDom.appendChild(newInstance.dom);
+    return newInstance;
+  } else {
+    const newInstance = instantiate(element);
+    parentDom.replaceChild(newInstance.dom, instance.dom);
+    return newInstance;
+  }
+}
+
+function instantiate(element) {
+  const { type, props } = element;
+
+  // Create DOM element
+  const isTextElement = type === "TEXT ELEMENT";
+  const dom = isTextElement
+    ? document.createTextNode("")
+    : document.createElement(type);
+
+  // Add event listeners
+  const isListener = name => name.startsWith("on");
+  Object.keys(props).filter(isListener).forEach(name => {
+    const eventType = name.toLowerCase().substring(2);
+    dom.addEventListener(eventType, props[name]);
+  });
+
+  // Set properties
+  const isAttribute = name => !isListener(name) && name != "children";
+  Object.keys(props).filter(isAttribute).forEach(name => {
+    dom[name] = props[name];
+  });
+
+  // Instantiate and append children
+  const childElements = props.children || [];
+  const childInstances = childElements.map(instantiate);
+  const childDoms = childInstances.map(childInstance => childInstance.dom);
+  childDoms.forEach(childDom => dom.appendChild(childDom));
+
+  const instance = { dom, element, childInstances };
+  return instance;
+}
+ ```
 #5.组件和状态(state)
 #6.Fiber:增量调和
