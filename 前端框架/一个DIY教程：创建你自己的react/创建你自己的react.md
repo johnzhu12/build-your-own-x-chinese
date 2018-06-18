@@ -24,6 +24,7 @@
 	* [4.7 总结](#47-总结)
 * [5.组件和状态(state)](#5组件和状态state)
 	* [5.1 回顾](#51-回顾)
+	* [5.2 组件类](#52-组件类)
 * [6.Fiber:增量调和](#6fiber增量调和)
 
 <!-- /code_chunk_output -->
@@ -642,6 +643,7 @@ function reconcileChildren(instance, element) {
 * 为jsx定义我们自己的‘标签’
 * 生命周期的钩子（我们这章不讲这个）
 
+##5.2 组件类
 首先我们要提供一个供组件继承的Component的基类。我们还需要提供一个含props参数的构造方法，一个setState方法，setState接收一个partialState参数来更新组件状态：
 ```js
 class Component {
@@ -719,4 +721,100 @@ function instantiate(element) {
   }
 }
 ```
+组件的内部实例和dom元素的内部实例不同，组件内部实例只能有一个子元素(从render函数返回)，所以组件内部只有childInstance属性，而dom元素有childInstances数组。另外，组件内部实例需要有对公共实例的引用，这样在调和期间，才可以调用render方法。
+
+唯一缺失的是处理组件实例调和，所以我们将为调和算法添加一些处理。如果组件实例只能有一个子元素，我们就不需要处理子元素的调和，我们只需要更新公共实例的props属性，重新渲染子元素并调和算法它：
+```js
+function reconcile(parentDom, instance, element) {
+  if (instance == null) {
+    // Create instance
+    const newInstance = instantiate(element);
+    parentDom.appendChild(newInstance.dom);
+    return newInstance;
+  } else if (element == null) {
+    // Remove instance
+    parentDom.removeChild(instance.dom);
+    return null;
+  } else if (instance.element.type !== element.type) {
+    // Replace instance
+    const newInstance = instantiate(element);
+    parentDom.replaceChild(newInstance.dom, instance.dom);
+    return newInstance;
+  } else if (typeof element.type === "string") {
+    // Update dom instance
+    updateDomProperties(instance.dom, instance.element.props, element.props);
+    instance.childInstances = reconcileChildren(instance, element);
+    instance.element = element;
+    return instance;
+  } else {
+    //Update composite instance
+    instance.publicInstance.props = element.props;
+    const childElement = instance.publicInstance.render();
+    const oldChildInstance = instance.childInstance;
+    const childInstance = reconcile(parentDom, oldChildInstance, childElement);
+    instance.dom = childInstance.dom;
+    instance.childInstance = childInstance;
+    instance.element = element;
+    return instance;
+  }
+}
+```
+这就是全部代码了，我们现在支持组件，我更新了[codepen](https://codepen.io/pomber/pen/RVqBrx),我们的应用代码就像下面这样：
+```js
+const stories = [
+  { name: "Didact introduction", url: "http://bit.ly/2pX7HNn" },
+  { name: "Rendering DOM elements ", url: "http://bit.ly/2qCOejH" },
+  { name: "Element creation and JSX", url: "http://bit.ly/2qGbw8S" },
+  { name: "Instances and reconciliation", url: "http://bit.ly/2q4A746" },
+  { name: "Components and state", url: "http://bit.ly/2rE16nh" }
+];
+
+class App extends Didact.Component {
+  render() {
+    return (
+      <div>
+        <h1>Didact Stories</h1>
+        <ul>
+          {this.props.stories.map(story => {
+            return <Story name={story.name} url={story.url} />;
+          })}
+        </ul>
+      </div>
+    );
+  }
+}
+
+class Story extends Didact.Component {
+  constructor(props) {
+    super(props);
+    this.state = { likes: Math.ceil(Math.random() * 100) };
+  }
+  like() {
+    this.setState({
+      likes: this.state.likes + 1
+    });
+  }
+  render() {
+    const { name, url } = this.props;
+    const { likes } = this.state;
+    const likesElement = <span />;
+    return (
+      <li>
+        <button onClick={e => this.like()}>{likes}<b>❤️</b></button>
+        <a href={url}>{name}</a>
+      </li>
+    );
+  }
+}
+
+Didact.render(<App stories={stories} />, document.getElementById("root"));
+```
+使用组件使我们可以创建自己的'JSX标签'，封装组件状态，并且只在子树上进行调和算法
+
+![demo3](./img/demo3.gif)
+最后的[codepen](https://codepen.io/pomber/pen/RVqBrx)使用这个系列的所有代码。
+
 #6.Fiber:增量调和
+>我们正在写一个react复制品来理解react内部运行机制，我们称之为didact.为了简洁代码，我们只专注于主要的功能。首先我们讲到了怎么渲染元素并如何使jsx生效。我们写了调和算法来只重新渲染两次更新之间的发生的变化。然后我们添加了组件类和setState()
+
+现在React16
