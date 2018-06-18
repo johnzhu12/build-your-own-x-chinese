@@ -1,5 +1,4 @@
 
-
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
@@ -16,10 +15,19 @@
 	* [3.1 JSX](#31-jsx)
 	* [3.2总结](#32总结)
 * [4.虚拟DOM和调和过程](#4虚拟dom和调和过程)
+	* [4.1 虚拟DOM和调和过程](#41-虚拟dom和调和过程)
+	* [4.2 实例(instance)](#42-实例instance)
+	* [4.3 重构](#43-重构)
+	* [4.4 复用dom节点](#44-复用dom节点)
+	* [4.5 子元素的调和](#45-子元素的调和)
+	* [4.6 删除Dom节点](#46-删除dom节点)
+	* [4.7 总结](#47-总结)
 * [5.组件和状态(state)](#5组件和状态state)
+	* [5.1 回顾](#51-回顾)
 * [6.Fiber:增量调和](#6fiber增量调和)
 
 <!-- /code_chunk_output -->
+
 
 #1.(Didact)一个DIY教程:创建你自己的react
 
@@ -37,7 +45,7 @@
 
 所以，那个作业还有意义吗？当然，我从中学到了很多，知道如何合理使用各种数据结构，并知道根据场景合理选用它们。
 
-这个系列文章的目的以及对应的（[仓库](https://github.com/hexacta/didact/)）也是一样，不过要实现的是一个，我们使用比链表更多的东西：React
+这个系列文章以及对应的（[仓库](https://github.com/hexacta/didact/)）的目的也是一样，不过要实现的是一个，我们比链表使用更多的东西：React
 
 >我好奇如果不考虑性能和设备兼容性，POSIX(可移植操作系统接口)核心可以实现得多么小而简单。
 — @ID_AA_Carmack
@@ -113,8 +121,8 @@ Didact.render(<App stories={stories} />, document.getElementById("root"));
 * Context（上下文）
 * 生命周期方法
 * ref属性
-* 通过key的调和过程（这里只讲根据子节点的顺序）
-* 其他渲染 （只支持DOM）
+* 通过key的调和过程（这里只讲根据子节点原顺序的调和）
+* 其他渲染引擎 （只支持DOM）
 * 旧浏览器支持
 >你可以从[react实现笔记](https://reactjs.org/docs/implementation-notes.html)，[Paul O’Shannessy](https://medium.com/@zpao)的这个youtube[演讲视频](https://www.youtube.com/watch?v=_MAD4Oly9yg),或者react[仓库地址](https://github.com/facebook/react),找到更多关于如何实现react的细节.
 #2.渲染dom元素
@@ -389,19 +397,19 @@ function createTextElement(value) {
 }  
  ```
  在这个小列子里，这个办法很有效。但在复杂情况下，这种重复创建所有子节点的方式并不可取。所以我们需要一种方式，来对比当前和之前的元素树之间的区别。最后只更新不同的地方。
- ##4.1 虚拟DOM和调和过程
+##4.1 虚拟DOM和调和过程
  React把这种diff过程称之为[调和过程](https://reactjs.org/docs/reconciliation.html)，我们现在也这么称呼它。首先我们要保存之前的渲染树，从而可以和新的树对比。换句话说，我们将实现自己的DOM,虚拟dom.
 
  这种虚拟dom的‘节点’应该是什么样的呢？首先考虑使用我们的Didact元素。它们已经有一个props.children属性，我们可以根据它来创建树。但是这依然有两个问题,一个是为了是调和过程容易些，我们必须为每个虚拟dom保存一个对真实dom的引用，并且我们更希望元素都不可变(imumutable).第二个问问题是后面我们要支持组件，组件有自己的状态(state),我们的元素还不能处理那种。
- ##4.2 实例(instance)
+##4.2 实例(instance)
  所以我们要介绍一个新的名词：实例。实例代表的已经渲染到DOM中的元素。它其实是一个有着，element,dom,chilInstances属性的JS普通对象。childInstances是有着该元素所以子元素实例的数组。
 
 > 注意我们这里提到的实例和[Dan Abramov](https://medium.com/@dan_abramov)在[react组件，元素和实列](https://medium.com/@dan_abramov/react-components-elements-and-instances-90800811f8ca)这篇文章提到实例不是一个东西。他指的是React调用继承于React.component的那些类的构造函数所获得的‘公共实例’(public instances)。我们会在以后把公共实例加上。
 
  每一个DOM节点都有一个相应的实例。调和算法的一个目标就是尽量避免创建和删除实例。创建删除实例意味着我们在修改DOM，所以重复利用实例就是越少地修改dom树。
 
- ##4.3 重构
- 我们来重写render方法，保留同样健壮的调和算法，添加一个实例化方法来根据给定的元素生成一个实例（包括其子元素）
+##4.3 重构
+ 我们来重写render方法，保留同样健壮的调和算法，但添加一个实例化方法来根据给定的元素生成一个实例（包括其子元素）
  ```js
  let rootInstance = null;
 
@@ -455,5 +463,260 @@ function instantiate(element) {
   return instance;
 }
  ```
+这段代码和之前一样，不过我们对上一次调用render方法保存了实例，我们也把调和方法和实例化方法分开了。
+
+为了复用dom节点而不需要重新创建dom节点，我们需要一种更新dom属性（className,style,onClick等等）的方法。所以，我们将把目前用来设置属性的那部分代码抽出来，作为一个更新属性的更通用的方法。
+```js
+function instantiate(element) {
+  const { type, props } = element;
+
+  // Create DOM element
+  const isTextElement = type === "TEXT ELEMENT";
+  const dom = isTextElement
+    ? document.createTextNode("")
+    : document.createElement(type);
+
+  updateDomProperties(dom, [], props);
+
+  // Instantiate and append children
+  const childElements = props.children || [];
+  const childInstances = childElements.map(instantiate);
+  const childDoms = childInstances.map(childInstance => childInstance.dom);
+  childDoms.forEach(childDom => dom.appendChild(childDom));
+
+  const instance = { dom, element, childInstances };
+  return instance;
+}
+
+function updateDomProperties(dom, prevProps, nextProps) {
+  const isEvent = name => name.startsWith("on");
+  const isAttribute = name => !isEvent(name) && name != "children";
+
+  // Remove event listeners
+  Object.keys(prevProps).filter(isEvent).forEach(name => {
+    const eventType = name.toLowerCase().substring(2);
+    dom.removeEventListener(eventType, prevProps[name]);
+  });
+  // Remove attributes
+  Object.keys(prevProps).filter(isAttribute).forEach(name => {
+    dom[name] = null;
+  });
+
+  // Set attributes
+  Object.keys(nextProps).filter(isAttribute).forEach(name => {
+    dom[name] = nextProps[name];
+  });
+
+  // Add event listeners
+  Object.keys(nextProps).filter(isEvent).forEach(name => {
+    const eventType = name.toLowerCase().substring(2);
+    dom.addEventListener(eventType, nextProps[name]);
+  });
+}
+```
+updateDomProperties 方法删除所有旧属性，然后添加上新的属性。如果属性没有变，它还是照做一遍删除添加属性。所以这个方法会做很多无谓的更新，为了简单，目前我们先这样写。
+
+##4.4 复用dom节点
+我们说过调和算法会尽量复用dom节点.现在我们为调和(reconcile)方法添加一个校验，检查是否之前渲染的元素和现在渲染的元素有一样的类型(type)，如果类型一致，我们将重用它(更新旧元素的属性来匹配新元素)
+```js
+function reconcile(parentDom, instance, element) {
+  if (instance == null) {
+    // Create instance
+    const newInstance = instantiate(element);
+    parentDom.appendChild(newInstance.dom);
+    return newInstance;
+  } else if (instance.element.type === element.type) {
+    // Update instance
+    updateDomProperties(instance.dom, instance.element.props, element.props);
+    instance.element = element;
+    return instance;
+  } else {
+    // Replace instance
+    const newInstance = instantiate(element);
+    parentDom.replaceChild(newInstance.dom, instance.dom);
+    return newInstance;
+  }
+}
+```
+##4.5 子元素的调和
+现在调和算法少了重要的一步，忽略了子元素。[子元素调和](https://reactjs.org/docs/reconciliation.html#recursing-on-children)是react的关键。它需要元素上一个额外的key属性来匹配之前和现在渲染树上的子元素.我们将实现一个该算法的简单版。这个算法只会匹配子元素数组同一位置的子元素。它的弊端就是当两次渲染时改变了子元素的排序，我们将不能复用dom节点。
+
+实现这个简单版，我们将匹配之前的子实例 instance.childInstances 和元素子元素 element.props.children，并一个个的递归调用调和方法（reconcile）。我们也保存所有reconcile返回的实例来更新childInstances。
+```js
+function reconcile(parentDom, instance, element) {
+  if (instance == null) {
+    // Create instance
+    const newInstance = instantiate(element);
+    parentDom.appendChild(newInstance.dom);
+    return newInstance;
+  } else if (instance.element.type === element.type) {
+    // Update instance
+    updateDomProperties(instance.dom, instance.element.props, element.props);
+    instance.childInstances = reconcileChildren(instance, element);
+    instance.element = element;
+    return instance;
+  } else {
+    // Replace instance
+    const newInstance = instantiate(element);
+    parentDom.replaceChild(newInstance.dom, instance.dom);
+    return newInstance;
+  }
+}
+
+function reconcileChildren(instance, element) {
+  const dom = instance.dom;
+  const childInstances = instance.childInstances;
+  const nextChildElements = element.props.children || [];
+  const newChildInstances = [];
+  const count = Math.max(childInstances.length, nextChildElements.length);
+  for (let i = 0; i < count; i++) {
+    const childInstance = childInstances[i];
+    const childElement = nextChildElements[i];
+    const newChildInstance = reconcile(dom, childInstance, childElement);
+    newChildInstances.push(newChildInstance);
+  }
+  return newChildInstances;
+} 
+```
+##4.6 删除Dom节点
+如果nextChildElements数组比childInstances数组长度长，reconcileChildren将为所有子元素调用reconcile方法，并传入一个undefined实例。这没什么问题，因为我们的reconcile方法里if (instance == null)语句已经处理了并创建新的实例。但是另一种情况呢？如果childInstances数组比nextChildElements数组长呢，因为element是undefined,这将导致element.type报错。
+
+这是我们并没有考虑到的，如果我们是从dom中删除一个元素情况。所以，我们要做两件事，在reconcile方法中检查element == null的情况并在reconcileChildren方法里过滤下childInstances
+```js
+function reconcile(parentDom, instance, element) {
+  if (instance == null) {
+    // Create instance
+    const newInstance = instantiate(element);
+    parentDom.appendChild(newInstance.dom);
+    return newInstance;
+  } else if (element == null) {
+    // Remove instance
+    parentDom.removeChild(instance.dom);
+    return null;
+  } else if (instance.element.type === element.type) {
+    // Update instance
+    updateDomProperties(instance.dom, instance.element.props, element.props);
+    instance.childInstances = reconcileChildren(instance, element);
+    instance.element = element;
+    return instance;
+  } else {
+    // Replace instance
+    const newInstance = instantiate(element);
+    parentDom.replaceChild(newInstance.dom, instance.dom);
+    return newInstance;
+  }
+}
+
+function reconcileChildren(instance, element) {
+  const dom = instance.dom;
+  const childInstances = instance.childInstances;
+  const nextChildElements = element.props.children || [];
+  const newChildInstances = [];
+  const count = Math.max(childInstances.length, nextChildElements.length);
+  for (let i = 0; i < count; i++) {
+    const childInstance = childInstances[i];
+    const childElement = nextChildElements[i];
+    const newChildInstance = reconcile(dom, childInstance, childElement);
+    newChildInstances.push(newChildInstance);
+  }
+  return newChildInstances.filter(instance => instance != null);
+}
+```
+##4.7 总结
+这一章我们增强了Didact使其支持更新dom.我们也通过重用dom节点避免大范围dom树的变更，使didact性能更好。另外也使管理一些dom内部的状态更方便，比如滚动位置和焦点。
+
+这里我更新了[codepen](https://codepen.io/pomber/pen/WjLqYW?editors=0010),在每个状态改变时调用render方法，你可以在devtools里查看我们是否重建dom节点。
+
+![pic](./img/demo2.gif)
+
+因为我们是在根节点调用render方法，调和算法是作用在整个树上。下面我们将介绍组件，组件将允许我们只把调和算法作用于其子树上。
+
 #5.组件和状态(state)
+##5.1 回顾
+我们上一章的代码有几个问题：
+* 每一次变更触发整个虚拟树的调和算法
+* 状态是全局的
+* 当状态变更时，我们需要显示地调用render方法
+
+组件解决了这些问题，我们可以：
+* 为jsx定义我们自己的‘标签’
+* 生命周期的钩子（我们这章不讲这个）
+
+首先我们要提供一个供组件继承的Component的基类。我们还需要提供一个含props参数的构造方法，一个setState方法，setState接收一个partialState参数来更新组件状态：
+```js
+class Component {
+  constructor(props) {
+    this.props = props;
+    this.state = this.state || {};
+  }
+
+  setState(partialState) {
+    this.state = Object.assign({}, this.state, partialState);
+  }
+}
+```
+我们的应用里将和其他元素类型(div或者span)一样继承这个类再这样使用：\<Mycomponent/>。注意到我们的[createElement](https://gist.github.com/pomber/2bf987785b1dea8c48baff04e453b07f)方法不需要改变任何东西，createElement会把组件类作为元素的type，并正常的处理props属性。我们真正需要的是一个根据所给元素来创建组件实例(我们称之为公共实例)的方法。
+```js
+function createPublicInstance(element, internalInstance) {
+  const { type, props } = element;
+  const publicInstance = new type(props);
+  publicInstance.__internalInstance = internalInstance;
+  return publicInstance;
+}
+```
+除了创建公共实例外，我们保留了对触发组件实例化的内部实例(从虚拟dom)引用，我们需要当公共实例状态发生变化时，能够只更新该实例的子树。
+```js
+class Component {
+  constructor(props) {
+    this.props = props;
+    this.state = this.state || {};
+  }
+
+  setState(partialState) {
+    this.state = Object.assign({}, this.state, partialState);
+    updateInstance(this.__internalInstance);
+  }
+}
+
+function updateInstance(internalInstance) {
+  const parentDom = internalInstance.dom.parentNode;
+  const element = internalInstance.element;
+  reconcile(parentDom, internalInstance, element);
+}
+```
+我们也需要更新实例化方法。对组件而言，我们需要创建公共实例，然后调用组件的render方法来获取之后要再次传给实例化方法的子元素：
+```js
+function instantiate(element) {
+  const { type, props } = element;
+  const isDomElement = typeof type === "string";
+
+  if (isDomElement) {
+    // Instantiate DOM element
+    const isTextElement = type === TEXT_ELEMENT;
+    const dom = isTextElement
+      ? document.createTextNode("")
+      : document.createElement(type);
+
+    updateDomProperties(dom, [], props);
+
+    const childElements = props.children || [];
+    const childInstances = childElements.map(instantiate);
+    const childDoms = childInstances.map(childInstance => childInstance.dom);
+    childDoms.forEach(childDom => dom.appendChild(childDom));
+
+    const instance = { dom, element, childInstances };
+    return instance;
+  } else {
+    // Instantiate component element
+    const instance = {};
+    const publicInstance = createPublicInstance(element, instance);
+    const childElement = publicInstance.render();
+    const childInstance = instantiate(childElement);
+    const dom = childInstance.dom;
+
+    Object.assign(instance, { dom, element, childInstance, publicInstance });
+    return instance;
+  }
+}
+```
 #6.Fiber:增量调和
