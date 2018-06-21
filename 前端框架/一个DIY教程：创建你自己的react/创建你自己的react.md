@@ -411,7 +411,7 @@ function createTextElement(value) {
 
 ##4.3 重构
  我们来重写render方法，保留同样健壮的调和算法，但添加一个实例化方法来根据给定的元素生成一个实例（包括其子元素）
- ```js
+   ```js
  let rootInstance = null;
 
 function render(element, container) {
