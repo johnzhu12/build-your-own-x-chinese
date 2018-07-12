@@ -22,7 +22,9 @@
 <!-- /code_chunk_output -->
 
 #1. 创建你自己的vuejs
+
 ##1.1 Vuejs概览
+
 vuejs是个简单而强大的MVVM库，它可以帮助我们搭建现代web用户界面。
 
 写这篇文章时，Vue在github上有36,312个stars。并且每月有230,250的npm下载量。Vue2.0更是为渲染层引入了轻量的虚拟dom实现，这为服务端渲染和原生端组件渲染带来了可能
@@ -33,19 +35,23 @@ vuejs宣称是一种渐进式javascript框架，尽管vuejs的核心很小，但
 
 
 ##1.2 Vuejs内部的组件
+
 我们首先来熟悉一下Vue内部的核心组件，vue的内部可以拆分成几部分
 
 ![vueinternals](./imgs/vueinternals.png)
 
 ###1.2.1 实例生命周期
+
 一个新创建的Vue实例会经历多个阶段，比如观察数据，初始化事件，编译模板，渲染。你可以在特定的阶段注册生命周期钩子，这些生命周期钩子将会被调用。
 
 ###1.2.2 响应式系统
+
 所谓的响应式系统就是vue‘数据-视图’绑定的黑魔法来源。当你设置vue实例的数据，视图相应的更新，反之亦然。
 
 Vue使用<font color="red">Object.defineProperty</font>使数据对象的属性'响应'。另外使用著名的**观察者模式**来连接数据变化和视图渲染
 
 ###1.2.3 虚拟DOM
+
 虚拟DOM是在内存里的javascript对象树，用来映射真实的DOM树。
 
 当数据变化了，vue将会渲染一颗全新的虚拟DOM树，并保存老的树。虚拟DOM模块会diff两颗树的不同，并把变化补丁到真实的DOM树上。
@@ -53,15 +59,18 @@ Vue使用<font color="red">Object.defineProperty</font>使数据对象的属性'
 Vue使用[snabbdom](https://github.com/snabbdom/snabbdom)作为虚拟DOM的实现基础，为了和Vue的其他组件兼容，在这个基础上，做了些稍微的修改。
 
 ###1.2.4 编译器
+
 编译器的工作就是把模板编译成渲染函数（抽象语法树 ASTs）.编译器把混杂着Vue指令(Vue的指令只是些HTML属性)的HTML以及其他实体解析成一颗树，并会最大化检测出所有的静态子树（所有没有动态绑定的子树），把它们移出渲染。vue使用的html解析器是由[John Resig](https://johnresig.com)所写
 >我们不会在这里讲解编译器的实现细节。我们可以在构建环节使用构建工具把Vue模板都编译成渲染函数，所以编译器并不包含在Vue的运行时中。另外我们甚至可以直接写渲染函数，所以编译器并不是理解Vue机制的核心部分。
 
 ###1.2.5 搭建开发环境
+
 创建我们自己的vuejs之前，我们首先要做一些环境配置，包括模块打包工具以及测试工具。因为我们将采用*测试-驱动*的流程
 
 因为这是一个javascript项目，我们将使用一些新颖的工具。首先就是跑‘npm init’命令并设置一些项目信息
 
 ####1.2.5.1 配置Rollup打包模块
+
 我们将使用Rollup来打包模块。[Rollup](https://rollupjs.org/guide/en)是一个js模块打包工具.它允许你为你的应用或库使用ES6的import/export语法来进行模块化开发。vuejs也是使用Rollup来打包模块的。
 
 我们将为Rollup创建一个配置文件。在根目录下，创建rollup.conf.js文件：
@@ -78,6 +87,7 @@ export default {
 不要忘了跑‘npm install rollup rollup-watch --save-dev’命令
 
 ####1.2.5.2 为测试配置Karma和Jasmine
+
 测试需要安装一些包，跑下面的命令：
 ```shell
 npm install karma jasmine karma-jasmine karma-chrome-launcher
@@ -109,6 +119,7 @@ module.exports = function(config) {
 ```
 
 ####1.2.5.3 目录结构
+
 整个目录结构如下：
 ```
 - package.json
@@ -124,6 +135,7 @@ module.exports = function(config) {
 
 ```
 ###1.2.6 启动
+
 我们方便起见，将添加一些npm脚本
 
 *package.json*
@@ -230,4 +242,5 @@ proxy用同样的key在vm上定义属性，并且这个属性有setter和getter�
 很棒！你现在已经启动了自己的vuejs，继续努力！
 
 #2 相应式系统
+
 ##2.1 Dep
