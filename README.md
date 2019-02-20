@@ -1,6 +1,6 @@
-###为什么有这个项目
+# 为什么有这个项目
 
-1.偶然发现一个很酷的项目[build your own x](https://github.com/danistefanovic/build-your-own-x/blob/master/README.md)
+偶然发现一个很酷的项目[build your own x](https://github.com/danistefanovic/build-your-own-x/blob/master/README.md)
    以前阅读过一本书，叫buid your own angularjs,收益匪浅。
    对于那些喜欢研究轮子的，这个系列简直太棒！
 
