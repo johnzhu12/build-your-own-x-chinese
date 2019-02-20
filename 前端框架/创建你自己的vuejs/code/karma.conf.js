@@ -2,7 +2,15 @@ module.exports = function (config) {
     config.set({
         files: [{ pattern: 'test/**/*.spec.js', watched: false }],
         frameworks: ['jasmine'],
-        browsers: ['Chrome'],
+        browsers: [
+            'ChromeDebugging'
+        ],
+        customLaunchers: {
+            ChromeDebugging: {
+                base: 'Chrome',
+                flags: ['--remote-debugging-port=9333']
+            }
+        },
         preprocessors: {
             './test/**/*.js': ['rollup']
         },
