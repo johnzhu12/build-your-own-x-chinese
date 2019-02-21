@@ -254,7 +254,7 @@ proxy用同样的key在vm上定义属性，并且这个属性有setter和getter�
 
 Vue的响应式系统使model和view之间的数据绑定显得简单自然。数据就是一个javascript对象，当data变更，视图就根据最后的状态相应地更新。堪称完美。
 在内部，vuejs将遍历data的所有属性并把它们用Object.defineProperty转成 getter/setter方法
-data中的每一个原始键值对，都分配一个Observer实例，Observer会先通知watchers都是谁订阅了这些值变化事件。
+data中的每一个原始键值对，都分配一个Observer实例，Observer会先通知watchers都是谁订阅了这些值的变化事件。
 每一个**Vue**实例都有一个**Watcher**实例，在组件作为依赖渲染的时候来收集所有'被触碰过'的属性。当数据变化了之后，watcher会重新收集依赖，并跑那些在初始化watcher的时候传过来的回调。
 那么，如何通知watcher数据变化了呢？观察者模式来了！我们定义一个新的类叫**Dep**。作为中介者，它的意思就是“依赖”。Oberserver实例有对所有当数据变动它需要去通知的deps的引用，而每个dep实例知道哪个watcher需要去更新。
 如果从上层看，这就是响应式系统运行的机制。下一节，我们详细看下这个响应系统的具体实现细节。

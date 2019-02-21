@@ -18,13 +18,13 @@ describe('Observer test', function () {
             update: jasmine.createSpy()
         }
         // observing primitive value
-        Dep.target = watcher
-        obj.a
-        // Dep.target = null
+        Dep.target = watcher;
+        console.log(obj.a)  //直接写obj.a貌似get不会被调用到
+        Dep.target = null
         expect(watcher.deps.length).toBe(1) // obj.a
-        // obj.a = 3
-        // expect(watcher.update.calls.count()).toBe(1)
-        // watcher.deps = []
+        obj.a = 3
+        expect(watcher.update.calls.count()).toBe(1)
+        watcher.deps = []
     });
 
 });

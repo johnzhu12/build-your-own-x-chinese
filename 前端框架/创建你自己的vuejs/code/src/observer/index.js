@@ -36,6 +36,7 @@ export function defineReactive(obj, key, val) {
         enumerable: true,
         configurable: true,
         get: function reactiveGetter() {
+            // console.log('geter be called once!')
             var value = val
             if (Dep.target) {
                 dep.depend()
@@ -43,6 +44,7 @@ export function defineReactive(obj, key, val) {
             return value
         },
         set: function reactiveSetter(newVal) {
+            // console.log('seter be called once!')
             var value = val
             if (newVal === value || (newVal !== newVal && value !== value)) {
                 return
