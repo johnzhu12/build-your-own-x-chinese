@@ -13,3 +13,4 @@ export function def(obj, key, val, enumerable) {
         configurable: true
     })
 }
+export var hasProto = '__proto__' in {}

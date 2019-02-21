@@ -89,7 +89,7 @@ export default {
 
 不要忘了跑‘npm install rollup rollup-watch --save-dev’命令
 
-####1.2.5.2 为测试配置Karma和Jasmine
+#### 1.2.5.2 为测试配置Karma和Jasmine
 
 测试需要安装一些包，跑下面的命令：
 
@@ -123,7 +123,7 @@ module.exports = function(config) {
 }
 ```
 
-####1.2.5.3 目录结构
+#### 1.2.5.3 目录结构
 
 整个目录结构如下：
 
@@ -196,9 +196,9 @@ import { initState } from './state'
 
 export function initMixin (Vue) {
   Vue.prototype._init = function (options) {
-  	var vm = this
-  	vm.$options = options
-  	initState(vm)
+  var vm = this
+  vm.$options = options
+  initState(vm)
   }
 }
 ```
@@ -327,7 +327,7 @@ import Dep from '../../src/observer/dep'
 
 describe('Observer test', function() {
   it('observing object prop change', function() {
-  	const obj = { a:1, b:{a:1}, c:NaN}
+    const obj = { a:1, b:{a:1}, c:NaN}
     observe(obj)
     // mock a watcher!
     const watcher = {
@@ -470,7 +470,7 @@ export function defineReactive (obj, key, val) {
       if (newVal === value || (newVal !== newVal && value !== value)) {
         return
       }
-	   val = newVal
+      val = newVal
       dep.notify()
     }
   })
@@ -501,3 +501,431 @@ Dep.prototype.notify = function() {
 
 Dep.prototype.notify调用subs数组里的每个watcher的update方法。对，这些watchers就是在Dep.target.addDep(dep)的时候被放进subs数组的。现在都连起来了。
 现在我们跑一下npm run test命令，我们之前写的用例应该通过了。
+
+## 2.3 监控嵌套对象
+
+我们现在只能监控原始类型的简单对象。所以这一节我们将添加非原始类型，比如对象的监控支持。
+
+首先我们把测试用例修改一下:
+
+test/observer/observer.spec.js
+
+```js
+  it('observing object prop change', function() {
+  ···
+    // observing non-primitive value
+    Dep.target = watcher
+    obj.b.a
+    Dep.target = null
+    expect(watcher.deps.length).toBe(3) // obj.b + b + b.a
+    obj.b.a = 3
+    expect(watcher.update.calls.count()).toBe(1)
+    watcher.deps = []
+  });
+```
+
+obj.b自己就是一个对象。所以我们通过检查改变obj.b是否被通知来判断对象监测是否支持。
+
+解决方案很简单，我们对val递归地调用observe方法。因为如果val不是个对象，observe方法就会返回。所以当我们用defineReactive来监控一堆键值对的时候，我们调用observe方法并把返回值保存在childOb上。
+
+src/observer/index.js
+
+```js
+export function defineReactive (obj, key, val) {
+  var dep = new Dep()
+  var childOb = observe(val) // new
+  Object.defineProperty(obj, key, {
+    ···
+  })
+}
+```
+
+我们要存下子observer的引用的原因是，当getter被调用的时候，我们需要在子对象上重新收集依赖。
+
+src/observer/index.js
+
+```js
+···
+get: function reactiveGetter () {
+      var value = val
+      if (Dep.target) {
+        dep.depend()
+        // re-collect for childOb
+        if (childOb) {
+          childOb.dep.depend()
+        }
+      }
+      return value
+    }
+···
+```
+
+同时在setter被调用的时候我们也要重新监控子对象。
+
+```js
+···
+set: function reactiveSetter (newVal) {
+      var value =  val
+      if (newVal === value || (newVal !== newVal && value !== value)) {
+        return
+      }
+      val = newVal
+      childOb = observe(newVal) //new
+      dep.notify()
+    }
+···
+```
+
+## 2.4 观测设置或删除数据
+
+Vue在监控数据方面有一些警示。因为Vue处理数据变化的方式,它不能监控到属性的添加和删除。数据只有在getter和setter被调用的时候才能被监控到，但设置或删除数据，getter和setter并不会被调用。
+
+然后，使用Vue.set(object, key, value)方法给嵌套的对象添加响应属性，和Vue.delete(object, key, value)来删除响应属性是可能的。
+
+像之前一样，我们先来写个测试用例:
+
+test/observer/observer.spec.js
+
+```js
+import {
+  Observer,
+  observe,
+  set as setProp, //new
+  del as delProp  //new
+}
+from "../../src/observer/index"
+import {
+  hasOwn,
+  isObject
+}
+from '../util/index' //new
+
+describe('Observer test', function() {
+  // new test case
+  it('observing set/delete', function() {
+    const obj1 = {
+      a: 1
+    }
+    // should notify set/delete data
+    const ob1 = observe(obj1)
+    const dep1 = ob1.dep
+    spyOn(dep1, 'notify')
+    setProp(obj1, 'b', 2)
+    expect(obj1.b).toBe(2)
+    expect(dep1.notify.calls.count()).toBe(1)
+    delProp(obj1, 'a')
+    expect(hasOwn(obj1, 'a')).toBe(false)
+    expect(dep1.notify.calls.count()).toBe(2)
+    // set existing key, should be a plain set and not
+    // trigger own ob's notify
+    setProp(obj1, 'b', 3)
+    expect(obj1.b).toBe(3)
+    expect(dep1.notify.calls.count()).toBe(2)
+    // should ignore deleting non-existing key
+    delProp(obj1, 'a')
+    expect(dep1.notify.calls.count()).toBe(3)
+  });
+  ···
+}
+```
+
+我们在Observer的测试用例里添加了'监控设置/删除'的新测试用例。
+
+现在我们来实现这两个方法:
+
+src/observer/index.js
+
+```js
+export function set (obj, key, val) {
+  if (hasOwn(obj, key)) {
+    obj[key] = val
+    return
+  }
+  const ob = obj.__ob__
+  if (!ob) {
+    obj[key] = val
+    return
+  }
+  defineReactive(ob.value, key, val)
+  ob.dep.notify()
+  return val
+}
+
+export function del (obj, key) {
+  const ob = obj.__ob__
+  if (!hasOwn(obj, key)) {
+    return
+  }
+  delete obj[key]
+  if (!ob) {
+    return
+  }
+  ob.dep.notify()
+}
+```
+
+set方法先检测属性是否存在，如果存在，设置新值并返回。然后我们通过obj.__ob__检测该对象是否是响应的，如果不是，返回。如果key不存在，就用defineReactive创建键值对，并调用ob.dep.notify()通知该对象的值已经改变了。
+
+delete方法就如预期的那样，通过delete操作符删除了对应的值。
+
+## 2.5 监控数组
+
+我们的实现还有一个问题，不能监控数组变化。因为通过下标访问数组元素并不会触发getter方法，所以我们之前的getter/setter方法不适用于数组监控。
+
+为了监控数组变化，我们需要劫持一些数组方法，比如Array.prototype.pop()和Array.prototype.shift(),并且我们将使用在最后实现的Vue.set API，来替代通过下标设置数组的值。
+下面是”监控数组变化“的测试用例，当我们使用数组API来改变数组，变化将被监控到。每一个数组元素也会被监控到。
+
+test/observer/observer.spec.js
+
+```js
+describe('Observer test', function() {
+  // new
+  it('observing array mutation', () => {
+    const arr = []
+    const ob = observe(arr)
+    const dep = ob.dep
+    spyOn(dep, 'notify')
+    const objs = [{}, {}, {}]
+    arr.push(objs[0])
+    arr.pop()
+    arr.unshift(objs[1])
+    arr.shift()
+    arr.splice(0, 0, objs[2])
+    arr.sort()
+    arr.reverse()
+    expect(dep.notify.calls.count()).toBe(7)
+    // inserted elements should be observed
+    objs.forEach(obj => {
+      expect(obj.__ob__ instanceof Observer).toBe(true)
+    })
+  });
+  ···
+}
+```
+
+第一步是在Oberver方法里处理数组
+
+src/observer/index.js
+
+```js
+export function Observer(value) {
+  this.value = value
+  this.dep = new Dep()
+  //this.walk(value) //deleted
+  // new
+  if(Array.isArray(value)){
+    this.observeArray(value)
+  }else{
+    this.walk(value)
+  }
+  def(value, '__ob__', this)
+}
+```
+
+observeArray仅仅是遍历数组，对每一个元素调用oberve方法。
+
+src/observer/index.js
+
+```js
+···
+Observer.prototype.observeArray = function(items) {
+  for (let i = 0, l = items.length; i < l; i++) {
+    observe(items[i])
+  }
+}
+```
+
+下面我们通过修改Array原型链来覆盖原来的Array方法
+
+首先我们创建一个单例，它拥有所有被改变了的数组方法。这些数组方法为了处理变化检测，加上了别的逻辑。
+
+src/observer/array.js
+
+```js
+import { def } from '../util/index'
+
+const arrayProto = Array.prototype
+export const arrayMethods = Object.create(arrayProto)
+
+/**
+ * Intercept mutating methods and emit events
+ */
+;[
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse'
+]
+.forEach(function (method) {
+  // cache original method
+  const original = arrayProto[method]
+  def(arrayMethods, method, function mutator () {
+    let i = arguments.length
+    const args = new Array(i)
+    while (i--) {
+      args[i] = arguments[i]
+    }
+    const result = original.apply(this, args)
+    const ob = this.__ob__
+    let inserted
+    switch (method) {
+      case 'push':
+        inserted = args
+        break
+      case 'unshift':
+        inserted = args
+        break
+      case 'splice':
+        inserted = args.slice(2)
+        break
+    }
+    if (inserted) ob.observeArray(inserted)
+    // notify change
+    ob.dep.notify()
+    return result
+  })
+})
+```
+
+arrayMethods就是那个拥有所有已经被改变方法的单例。
+
+对于数组里的所有方法
+
+>['push','pop','shift','unshift','splice','sort','reverse']
+
+我们定义了一个mutator方法来改变原来的方法。
+
+在mutator里，我们首先获取所有的参数放到一个数组里，然后对这个参数数组调用所有的原来数组方法，并保存结果。
+
+当对数组添加新元素时，我们对新元素数组调用observeArray方法。
+
+最后我们通过ob.dep.notify()来通知变化，并返回结果。
+
+第二步，我们需要把这个单例加到原型链里面。
+
+如果我们在当前浏览器环境下，可以直接使用__proto__下标的话，我们就把数组的原型链直接指向我们创建的单例。
+
+如果浏览器不支持__proto__的话，我们就把arrayMethods单例混入监控的数组。
+
+所以我们添加一些工具函数：
+
+src/observer/index.js
+
+```js
+// helpers
+/**
+ * Augment an target Object or Array by intercepting
+ * the prototype chain using __proto__
+ */
+function protoAugment (target, src) {
+  target.__proto__ = src
+}
+
+/**
+ * Augment an target Object or Array by defining
+ * properties.
+ */
+function copyAugment (target, src, keys) {
+  for (let i = 0, l = keys.length; i < l; i++) {
+    var key = keys[i]
+    def(target, key, src[key])
+  }
+}
+```
+
+在Observer方法里，我们根据是否可以使用__proto__,来决定调用protoAugment或copyAugment。给我们的原始数组增强功能。
+
+```js
+import {
+  def,
+  hasOwn,
+  hasProto, //new
+  isObject
+}
+from '../util/index'
+
+export function Observer(value) {
+  this.value = value
+  this.dep = new Dep()
+  if(Array.isArray(value)){
+    //new
+    var augment = hasProto
+        ? protoAugment
+        : copyAugment
+      augment(value, arrayMethods, arrayKeys)
+    this.observeArray(value)
+  }else{
+    this.walk(value)
+  }
+  def(value, '__ob__', this)
+}
+```
+
+hasProto的定义很简单
+
+src/util/index.js
+
+```js
+···
+export var hasProto = '__proto__' in {}
+```
+
+现在应该能通过那个”监控数组变化“的测试了
+
+## 2.6 Watcher
+
+我们在之前模拟了Watcher:
+
+```js
+const watcher = {
+  deps: [],
+  addDep (dep) {
+    this.deps.push(dep)
+    dep.addSub(this)
+    },
+    update: jasmine.createSpy()
+}
+```
+
+所以这里watcher在这里只是一个有deps属性的对象，deps用来记录该watcher所以的依赖。它还有一个addDep方法来添加依赖。一个update方法，当监控的数据变化时候被调用。
+
+我们来看下Watcher的构造函数签名:
+
+```js
+constructor (
+    vm: Component,
+    expOrFn: string | Function,
+    cb: Function,
+    options?: Object
+  )
+```
+
+可以看到Watcher的构造函数接收一个expOrFn和一个cb回调函数。expOrFn是一个在初始化watcher的时候执行的表达式或方法。回调是在watcher需要执行的时候被调用的。
+
+下面的测试用例应该能揭开worker的神秘面纱。
+
+test/observer/watcher.spec.js
+
+```js
+import Vue from "../../src/instance/index";
+import Watcher from "../../src/observer/watcher";
+
+describe('Wathcer test', function() {
+  it('should call callback when simple data change', function() {
+    var vm = new Vue({
+      data:{
+        a:2
+      }
+    })
+    var cb = jasmine.createSpy('callback');
+    var watcher = new Watcher(vm, function(){
+      var a = vm.a
+    }, cb)
+    vm.a = 5;
+    expect(cb).toHaveBeenCalled();
+  });
+}
+```
