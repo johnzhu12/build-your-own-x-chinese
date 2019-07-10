@@ -3,29 +3,32 @@
 
 <!-- code_chunk_output -->
 
-* [1.(Didact)一个DIY教程:创建你自己的react](#1didact一个diy教程创建你自己的react)
-	* [1.1 引言](#11-引言)
-* [2.渲染dom元素](#2渲染dom元素)
-	* [2.1 什么是DOM](#21-什么是dom)
-	* [2.2 Didact元素](#22-didact元素)
-	* [2.3 渲染dom元素](#23-渲染dom元素)
-	* [2.4 渲染DOM文本节点](#24-渲染dom文本节点)
-	* [2.5 总结](#25-总结)
-* [3.JSX和创建元素](#3jsx和创建元素)
-	* [3.1 JSX](#31-jsx)
-	* [3.2总结](#32总结)
-* [4.虚拟DOM和调和过程](#4虚拟dom和调和过程)
-	* [4.1 虚拟DOM和调和过程](#41-虚拟dom和调和过程)
-	* [4.2 实例(instance)](#42-实例instance)
-	* [4.3 重构](#43-重构)
-	* [4.4 复用dom节点](#44-复用dom节点)
-	* [4.5 子元素的调和](#45-子元素的调和)
-	* [4.6 删除Dom节点](#46-删除dom节点)
-	* [4.7 总结](#47-总结)
-* [5.组件和状态(state)](#5组件和状态state)
-	* [5.1 回顾](#51-回顾)
-	* [5.2 组件类](#52-组件类)
-* [6.Fiber:增量调和](#6fiber增量调和)
+- [1.(Didact)一个DIY教程:创建你自己的react](#1didact一个diy教程创建你自己的react)
+  - [1.1 引言](#11-引言)
+- [2.渲染dom元素](#2渲染dom元素)
+  - [2.1 什么是DOM](#21-什么是dom)
+  - [2.2 Didact元素](#22-didact元素)
+  - [2.3 渲染dom元素](#23-渲染dom元素)
+  - [2.4 渲染DOM文本节点](#24-渲染dom文本节点)
+  - [2.5 总结](#25-总结)
+- [3.JSX和创建元素](#3jsx和创建元素)
+  - [3.1 JSX](#31-jsx)
+  - [3.2总结](#32总结)
+- [4.虚拟DOM和调和过程](#4虚拟dom和调和过程)
+  - [4.1 虚拟DOM和调和过程](#41-虚拟dom和调和过程)
+  - [4.2 实例(instance)](#42-实例instance)
+  - [4.3 重构](#43-重构)
+  - [4.4 复用dom节点](#44-复用dom节点)
+  - [4.5 子元素的调和](#45-子元素的调和)
+  - [4.6 删除Dom节点](#46-删除dom节点)
+  - [4.7 总结](#47-总结)
+- [5.组件和状态(state)](#5组件和状态state)
+  - [5.1 回顾](#51-回顾)
+  - [5.2 组件类](#52-组件类)
+- [6.Fiber:增量调和](#6fiber增量调和)
+  - [6.1 为什么使用Fiber](#61-为什么使用fiber)
+  - [6.2 调度微任务(micro-task)](#62-调度微任务micro-task)
+  - [6.3 fiber数据结构](#63-fiber数据结构)
 
 <!-- /code_chunk_output -->
 
@@ -270,10 +273,10 @@ function render(element, parentDom) {
   parentDom.appendChild(dom);
 }
 ```
-##2.5 总结
+## 2.5 总结
 我们现在创建了一个可以渲染元素以及子元素的render方法。后面我们需要实现如何创建元素。我们将在下节讲到如何使JSX和Didact很好地融合。
-#3.JSX和创建元素
-##3.1 JSX
+# 3.JSX和创建元素
+## 3.1 JSX
 我们之前讲到了[Didact元素](#2渲染dom元素),讲到如何渲染到DOM，用一种很繁琐的方式.这一节我们来看看如何使用JSX简化创建元素的过程。
 
 JSX提供了一些创建元素的语法糖，不用使用下面的代码：
@@ -814,7 +817,78 @@ Didact.render(<App stories={stories} />, document.getElementById("root"));
 ![demo3](./img/demo3.gif)
 最后的[codepen](https://codepen.io/pomber/pen/RVqBrx)使用这个系列的所有代码。
 
-#6.Fiber:增量调和
+# 6.Fiber:增量调和
+
 >我们正在写一个react复制品来理解react内部运行机制，我们称之为didact.为了简洁代码，我们只专注于主要的功能。首先我们讲到了怎么渲染元素并如何使jsx生效。我们写了调和算法来只重新渲染两次更新之间的发生的变化。然后我们添加了组件类和setState()
 
-现在React16
+现在React16已经发布了，因为内部架构重构，所以大部分react代码都进行了重写。
+
+这意味着一些我们之前不能通过旧的架构实现的功能现在可以完美实现了。
+
+同时也意味着我们之前这个系列所写的代码全部没用了😁。
+
+这篇文章里，我们将使用react的fiber架构重新实现didact.我们将模仿源码里的架构，变量，函数名。跳过一些我们不需要的公共API：
+
+- Didact.createElement()
+- Didact.render() (只支持dom rendering)
+- Didact.createElement(有setState(),但没有context和生命周期方法)
+
+如果你想直接看代码，可以移步更新的后的[codepen示例](https://codepen.io/pomber/pen/veVOdd)和[git仓库](https://github.com/pomber/didact)
+
+首先解释我们为什么要重写代码
+
+## 6.1 为什么使用Fiber
+
+>这里并不会覆盖fiber的方方面面，如果你想知道更多，请看[资源列表](https://github.com/koba04/react-fiber-resources)
+
+当浏览器主线程在忙着运行一些代码的时候，重要的短时任务却不得不等待主线程空闲下来才能得到执行。
+
+为了说明这个问题，我写了个小[demo](https://pomber.github.io/incremental-rendering-demo/react-sync.html)(在手机上看效果明显).主线程必须每16ms有一刻空闲才能保证行星转起来。如果主线程卡在其他事情上，比如说200ms,你就会发现动画失帧，行星卡住直到主线程空闲。
+
+是什么导致主线程繁忙而不能分配一点时间来确保动画顺滑和界面可相应？
+
+记得之前实现的[调和代码](https://engineering.hexacta.com/didact-instances-reconciliation-and-virtual-dom-9316d650f1d0)?一旦开始调和就不会停止。如果主线程这个时候需要干别的事，它就得等着。而且，**因为调和过程基于太多的递归调用，很难让它可停止**。所以，我们将采用一种新的数据结构，它让我们可以使用循环代替递归调用。
+
+>理解 React 如何遍历fiber Tree却不使用递归得花上一点时间。。。。
+
+## 6.2 调度微任务(micro-task)
+
+我们需要把任务拆分成小块任务，运行这些小任务需要一小段时间，让主线程先做高优先级的任务，然后回来完成这些未完成的任务。
+
+我们将使用一个方法[requestIdleCallback](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback),该方法把一个回调方法推到队列中，下次等浏览器空闲的时候就会执行。同时它还包含一个deadline参数，表示我们剩下多少时间来运行代码。
+
+主要工作都在performUnitOfWork方法里，我们将在这方法里写新的调和方法。这个方法将执行一段任务，然后返回下次需要继续执行的任务信息。
+
+为了追踪这些任务我们将使用fiber
+
+## 6.3 fiber数据结构
+
+我们将为每个要渲染的组件创建一个fiber,nextUnitOfWork指向下一个我们将处理的fiber.performUnitOfWork会处理当前的fiber,并会在所有工作结束后返回一个新的fiber.不要担心，我会在后面详细解释。
+
+一个fiber数据结构是什么样的？
+
+其实它就是一个普通的javascript的对象。
+
+我们将使用parent,child,和sibling属性来创建一颗fiber树。用它来描绘组件树。
+
+stateNode是指向组件实例的引用。它可能是dom元素或者是用户自己定义的组件类
+
+比如：
+
+![fiber1](./img/fiber1.png)
+
+上面的例子可以看到，我们将支持3种不同的组件：
+
+- b,p,i的fiber代表**主组件(host components)**,我们将用HOST_COMPONENT tag来标识它们，它们fiber的type是字符串(就是html元素的tag)。props就是这些元素的属性和事件监听
+
+- Foo fiber表示一个**class组件**，它的tag标识是CLASS_COMPONENT。它的type是指向用户继承Didact.Component定义的类。
+
+- div fiber代表**主根节点(host root)**,它和主组件很像，因为它有一个stateNode的DOM元素。但作为树的根节点，它要被特殊对待。它的tag标识是HOST_ROOT.需要注意的是，这个fiber的stateNode就是传给Didact.render()的DOM节点
+
+另一个很重要的属性是alternate。我们需要这个属性是因为大多数情况下，我们将有两个fiber树。**一个表示我们已经渲染到dom的元素，我们称之为当前的树或者旧树。另一个是我们将要更新的树(调用setState或者Didact.render()),我们称之为进行中的树**
+
+进行中的树和旧树之间不共享任何fiber节点。一旦我们创建完成进行中的树并完成了dom变更，进行中的树就变成了旧树。
+
+所以我们使用alternate来关联进行的树和旧树对应的fiber节点。一个fiber和它的alternate共享一样的tag,type和stateNode.偶尔，当我们渲染新内容时，fibers没有alternate属性。
+
+最后，我们需要effects列表和effectTag。当我们发现进行中的树需要更新DOM时，我们就把effectTag设置成PLACEMENT，UPDATE，DELETION。为了更方便地一次性提交所有的dom修改

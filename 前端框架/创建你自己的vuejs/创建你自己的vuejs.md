@@ -3,7 +3,7 @@
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
-
+* [1. 创建你自己的vuejs](#1-创建你自己的vuejs)
 * [1. 创建你自己的vuejs](#1-创建你自己的vuejs)
 	* [1.1 Vuejs概览](#11-vuejs概览)
 	* [1.2 Vuejs内部的组件](#12-vuejs内部的组件)
@@ -19,8 +19,13 @@
 * [2 响应式系统](#2-响应式系统)
 	* [2.1 Dep](#21-dep)
 	* [2.2 基本的Observer](#22-基本的observer)
-
+	* [2.3 监控嵌套对象](#23-监控嵌套对象)
+	* [2.4 观测设置或删除数据](#24-观测设置或删除数据)
+	* [2.5 监控数组](#25-监控数组)
+	* [2.6 Watcher](#26-watcher)
+	* [2.6 Watcher](#26-watcher)
 <!-- /code_chunk_output -->
+[原文链接](https://github.com/jsrebuild/build-your-own-vuejs)
 
 # 1. 创建你自己的vuejs
 
@@ -49,7 +54,7 @@ vuejs宣称是一种渐进式javascript框架，尽管vuejs的核心很小，但
 
 所谓的响应式系统就是vue‘数据-视图’绑定的黑魔法来源。当你设置vue实例的数据，视图相应的更新，反之亦然。
 
-Vue使用<font color="red">Object.defineProperty</font>使数据对象的属性'响应'。另外使用著名的**观察者模式**来连接数据变化和视图渲染
+Vue使用<font color="red">Object.defineProperty</font>使数据对象的属性'响应'。另外使用众所周知的**观察者模式**来连接数据变化和视图渲染
 
 ### 1.2.3 虚拟DOM
 
@@ -903,7 +908,7 @@ constructor (
   )
 ```
 
-可以看到Watcher的构造函数接收一个expOrFn和一个cb回调函数。expOrFn是一个在初始化watcher的时候执行的表达式或方法。回调是在watcher需要执行的时候被调用的。
+可以看到Watcher的构造函数接收一个expOrFn和一个cb回调函数。expOrFn是一个在初始化watcher的时候就执行的表达式或方法。回调函数是在当watcher需要执行回调的时候被调用的。
 
 下面的测试用例应该能揭开worker的神秘面纱。
 
@@ -929,3 +934,44 @@ describe('Wathcer test', function() {
   });
 }
 ```
+
+expOrFn被执行，所以vm数据的响应式getter会被调用(这里是vm.a的getter).watcher把自己设置为Dep的target.所以vm.a的dep就会把该watcher实例放到自己的subs数组里。watcher会把vm.a的dep推进自己的deps数组。当vm.a的setter被调用。vm.a下，dep的subs数组就会被遍历并且subs数组中的每个watcher的update方法将会被调用。最后watcher的回调将会被调用。
+
+现在我们来实现watcher类：
+
+src/observer/watcher.js
+
+```js
+let uid = 0
+
+export default function Watcher(vm, expOrFn, cb, options) {
+  options = options ? options : {}
+  this.vm = vm
+  vm._watchers.push(this)
+  this.cb = cb
+  this.id = ++uid
+
+  // options
+  this.deps = []
+  this.newDeps = []
+  this.depIds = new Set()
+  this.newDepIds = new Set()
+  this.getter = expOrFn
+  this.value = this.get()
+}
+```
+
+Watcher类会初始化一些属性。每个Watcher实例会保留一个id以备后用。这个id通过'this.id = ++ uid'设置。this.deps和this.newDeps是存放deps对象的数组，用来管理Deps.我们后面将知道为什么需要两个数组。this.depIds和this.newDepIds是相对应的id集合。我们可以通过这些集合快速查找对应的dep实例是否存在。
+
+src/observer/watcher.js
+
+```js
+Watcher.prototype.get = function() {
+  pushTarget(this)
+  var value = this.getter.call(this.vm, this.vm)
+  popTarget()
+  this.cleanupDeps()
+  return value
+}
+```
+Watcher.prototype.get 方法首先push当前的Watcher实例
