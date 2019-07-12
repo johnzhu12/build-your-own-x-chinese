@@ -29,6 +29,8 @@
   - [6.1 为什么使用Fiber](#61-为什么使用fiber)
   - [6.2 调度微任务(micro-task)](#62-调度微任务micro-task)
   - [6.3 fiber数据结构](#63-fiber数据结构)
+  - [6.4 Didact的调用层次](#64-didact的调用层次)
+  - [6.5 之前的代码](#65-之前的代码)
 
 <!-- /code_chunk_output -->
 
@@ -891,4 +893,174 @@ stateNode是指向组件实例的引用。它可能是dom元素或者是用户�
 
 所以我们使用alternate来关联进行的树和旧树对应的fiber节点。一个fiber和它的alternate共享一样的tag,type和stateNode.偶尔，当我们渲染新内容时，fibers没有alternate属性。
 
-最后，我们需要effects列表和effectTag。当我们发现进行中的树需要更新DOM时，我们就把effectTag设置成PLACEMENT，UPDATE，DELETION。为了更方便地一次性提交所有的dom修改
+最后，我们需要effects列表和effectTag。当我们发现进行中的树需要更新DOM时，我们就把effectTag设置成PLACEMENT，UPDATE，DELETION。为了更方便地一次性提交所有的dom修改，我们保存一个包含所有fiber的列表(包括fiber的子树)，每个fiber有一个effects属性，下面列了所有effectTag。
+
+貌似一次性讲了太多概念了，不要担心，我们接下来就会代码实现fiber树
+
+## 6.4 Didact的调用层次
+
+为了理清代码逻辑，我们先来看一张图：
+
+![codeFlow](./img/codeFlow.png)
+
+我们将从render()和setState()开始，顺着到commitAllWork()方法结束的路线
+
+## 6.5 之前的代码
+
+我说过我们将重写之前的大部分代码，那开始先来看下哪些不需要重写
+
+在[JSX和创建元素](#3jsx和创建元素)里我们写了创建元素createElement()的[代码](https://gist.github.com/pomber/2bf987785b1dea8c48baff04e453b07f)，这个方法用来处理转换好的jsx.这部分我们不需要改，我们将保留相同的元素。如果你不了解什么是元素，请看前面的章节。
+
+在[实例，虚拟DOM和调和过程](#4虚拟dom和调和过程)里，我们写了updateDomProperties()方法来更新dom节点的属性，另外createDomElement()方法我们也抽出来了，你可以在dom-uitls.js这个[gist](https://gist.github.com/pomber/c63bd22dbfa6c4af86ba2cae0a863064)里找到这两个方法。
+
+在[组件和状态](#5组件和状态state)里，我们写了Component基类，现在我们来改一下，setState()调用scheduleUpdate(),createInstance()为创建的实例保存一个指向fiber的引用
+
+```js
+class Component {
+  constructor(props) {
+    this.props = props || {};
+    this.state = this.state || {};
+  }
+
+  setState(partialState) {
+    scheduleUpdate(this, partialState);
+  }
+}
+
+function createInstance(fiber) {
+  const instance = new fiber.type(fiber.props);
+  instance.__fiber = fiber;
+  return instance;
+}
+```
+
+仅仅以这段代码开始，我们将把剩下的部分重头写一遍
+
+![flow1](./img/flow1.png)
+
+除了Component类和createElement()方法，我们还有2个公共方法:render()和setState(),我们刚刚已经看到setState()只是调用scheduleUpdate()方法。
+
+render()方法和scheduleUpdate()类似，它们接收一个更新任务并把任务推进队列：
+
+```js
+// Fiber tags
+const HOST_COMPONENT = "host";
+const CLASS_COMPONENT = "class";
+const HOST_ROOT = "root";
+
+// Global state
+const updateQueue = [];
+let nextUnitOfWork = null;
+let pendingCommit = null;
+
+function render(elements, containerDom) {
+  updateQueue.push({
+    from: HOST_ROOT,
+    dom: containerDom,
+    newProps: { children: elements }
+  });
+  requestIdleCallback(performWork);
+}
+
+function scheduleUpdate(instance, partialState) {
+  updateQueue.push({
+    from: CLASS_COMPONENT,
+    instance: instance,
+    partialState: partialState
+  });
+  requestIdleCallback(performWork);
+}
+```
+
+我们将使用updateQueue数组来保存待进行的变更任务，每调用render()或scheduleUpdate()就会推一个新的update对象进updateQueue队列，每个update信息都是不同的，我们将在后面的resetNextUnitOfWork()方法里看到具体细节。
+
+update被推进队列之后，就触发一个对performWork()的延时调用。
+
+![flow2](./img/flow2.png)
+
+```js
+const ENOUGH_TIME = 1; // milliseconds
+
+function performWork(deadline) {
+  workLoop(deadline);
+  if (nextUnitOfWork || updateQueue.length > 0) {
+    requestIdleCallback(performWork);
+  }
+}
+
+function workLoop(deadline) {
+  if (!nextUnitOfWork) {
+    resetNextUnitOfWork();
+  }
+  while (nextUnitOfWork && deadline.timeRemaining() > ENOUGH_TIME) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+  }
+  if (pendingCommit) {
+    commitAllWork(pendingCommit);
+  }
+}
+```
+
+这里就是我们之前提到的使用performUnitOfWork()模式的地方
+
+requestIdleCallback()调用目标方法并传入一个deadline参数。performWork()接收deadline参数并把它传给workLoop()方法。workLoop()返回后，performWork()检查是否还有剩余的任务，如果有的话，就自己安排一个延时调用。
+
+workLoop()是监控时间的方法。如果deadline太小了，就会跳出work loop并更新nextUnitOfWork,为了下次还能继续更新。
+
+>我们使用ENOUGH_TIME(1ms 的常量，react里也是这么设置的)来检查deadline.timeRemaining()的剩余时间是否够执行一个单元的任务。如果performUnitOfWork()花费时间比这多，这就超出了deadline的限制。deadline只是浏览器的建议时间，所以超过几毫米也不是那么严重
+
+performUnitOfWork()将会创建对应更新的**进行中的树**，并且找出对应到dom的相应变更。这些都是增量做的，一次一个fiber.
+
+performUnitOfWork()完成当前更新的所有任务后，它会返回null并把dom待更新的内容保存在pendingCommit中。最后，commitAllWork()从pendingCommit拿到effects并更新dom.
+
+注意，commitAllWork()是在循环外调用的。performUnitOfWork()并不会去更新dom,所以把它们分开是没问题的。从另一个角度来说，commitAllWork()会变更dom，所以为了避免不稳定的UI,应该一次性完成。
+
+我们还没说nextUnitOfWork哪来的.
+
+![flow3](./img/flow2.png)
+
+接收一个update对象并把它转变成nextUnitOfWork的方法就是resetNextUnitOfWork()
+
+```js
+function resetNextUnitOfWork() {
+  const update = updateQueue.shift();
+  if (!update) {
+    return;
+  }
+
+  // Copy the setState parameter from the update payload to the corresponding fiber
+  if (update.partialState) {
+    update.instance.__fiber.partialState = update.partialState;
+  }
+
+  const root =
+    update.from == HOST_ROOT
+      ? update.dom._rootContainerFiber
+      : getRoot(update.instance.__fiber);
+
+  nextUnitOfWork = {
+    tag: HOST_ROOT,
+    stateNode: update.dom || root.stateNode,
+    props: update.newProps || root.props,
+    alternate: root
+  };
+}
+
+function getRoot(fiber) {
+  let node = fiber;
+  while (node.parent) {
+    node = node.parent;
+  }
+  return node;
+}
+```
+
+resetNextUnitOfWork()首先从队列中取出第一个update对象。
+
+如果update上有partialState，我们就把它保存在组件实例的fiber上。然后我们在调用组件的render()方法时就可以用了。
+
+然后我们寻找老的fiber树的根节点。如果update来自第一次调用render()方法，就没有根fiber。所以跟fiber就是null。如果是后续的render调用，我们就会在DOM节点的_rootContainerFiber属性上找到跟fiber。但如果更新是来自于setState()，我们就只能通过向上查找fiber实例的父母节点，知道某个节点没有父母，那它就是根节点。
+
+然后，我们把新的fiber赋给nextUnitOfWork,**这个fiber就是进行中的树的根节点**
+
+如果我们没有旧的根节点，stateNode就会作为DOM节点传给render()方法
