@@ -887,11 +887,11 @@ stateNode是指向组件实例的引用。它可能是dom元素或者是用户�
 
 - div fiber代表**主根节点(host root)**,它和主组件很像，因为它有一个stateNode的DOM元素。但作为树的根节点，它要被特殊对待。它的tag标识是HOST_ROOT.需要注意的是，这个fiber的stateNode就是传给Didact.render()的DOM节点
 
-另一个很重要的属性是alternate。我们需要这个属性是因为大多数情况下，我们将有两个fiber树。**一个表示我们已经渲染到dom的元素，我们称之为当前的树或者旧树。另一个是我们将要更新的树(调用setState或者Didact.render()),我们称之为进行中的树**
+另一个很重要的属性是alternate。我们需要这个属性是因为大多数情况下，我们将有两个fiber树。**一个表示我们已经渲染到dom的元素，我们称之为现有的树或者旧树。另一个是我们将要进行更新的树(调用setState或者Didact.render()时),我们称之为进行中的树**
 
 进行中的树和旧树之间不共享任何fiber节点。一旦我们创建完成进行中的树并完成了dom变更，进行中的树就变成了旧树。
 
-所以我们使用alternate来关联进行的树和旧树对应的fiber节点。一个fiber和它的alternate共享一样的tag,type和stateNode.偶尔，当我们渲染新内容时，fibers没有alternate属性。
+所以我们使用alternate来关联进行的树和旧树对应的fiber节点。一个fiber和它的alternate共享一样的tag,type和stateNode.有时候，当我们渲染全新的内容时，fibers就会都没有alternate属性。
 
 最后，我们需要effects列表和effectTag。当我们发现进行中的树需要更新DOM时，我们就把effectTag设置成PLACEMENT，UPDATE，DELETION。为了更方便地一次性提交所有的dom修改，我们保存一个包含所有fiber的列表(包括fiber的子树)，每个fiber有一个effects属性，下面列了所有effectTag。
 
@@ -903,7 +903,7 @@ stateNode是指向组件实例的引用。它可能是dom元素或者是用户�
 
 ![codeFlow](./img/codeFlow.png)
 
-我们将从render()和setState()开始，顺着到commitAllWork()方法结束的路线
+我们将从render()和setState()开始，先顺着由此到commitAllWork()结束的这条路线
 
 ## 6.5 之前的代码
 
@@ -913,7 +913,7 @@ stateNode是指向组件实例的引用。它可能是dom元素或者是用户�
 
 在[实例，虚拟DOM和调和过程](#4虚拟dom和调和过程)里，我们写了updateDomProperties()方法来更新dom节点的属性，另外createDomElement()方法我们也抽出来了，你可以在dom-uitls.js这个[gist](https://gist.github.com/pomber/c63bd22dbfa6c4af86ba2cae0a863064)里找到这两个方法。
 
-在[组件和状态](#5组件和状态state)里，我们写了Component基类，现在我们来改一下，setState()调用scheduleUpdate(),createInstance()为创建的实例保存一个指向fiber的引用
+在[组件和状态](#5组件和状态state)里，我们写了Component基类，现在我们来改一下，setState()调用scheduleUpdate(),createInstance()保存指向实例上fiber的一个引用
 
 ```js
 class Component {
@@ -1003,9 +1003,9 @@ function workLoop(deadline) {
 
 这里就是我们之前提到的使用performUnitOfWork()模式的地方
 
-requestIdleCallback()调用目标方法并传入一个deadline参数。performWork()接收deadline参数并把它传给workLoop()方法。workLoop()返回后，performWork()检查是否还有剩余的任务，如果有的话，就自己安排一个延时调用。
+requestIdleCallback()调用目标方法并传入一个deadline参数。performWork()接收deadline参数并把它传给workLoop()方法。workLoop()返回后，performWork()检查是否还有剩余的任务，如果有的话，就延时调用自己。
 
-workLoop()是监控时间的方法。如果deadline太小了，就会跳出work loop并更新nextUnitOfWork,为了下次还能继续更新。
+workLoop()是监控时间的方法。如果deadline太小了，就会跳出工作循环并更新nextUnitOfWork,便于下次回来还能继续更新。
 
 >我们使用ENOUGH_TIME(1ms 的常量，react里也是这么设置的)来检查deadline.timeRemaining()的剩余时间是否够执行一个单元的任务。如果performUnitOfWork()花费时间比这多，这就超出了deadline的限制。deadline只是浏览器的建议时间，所以超过几毫米也不是那么严重
 
@@ -1063,4 +1063,183 @@ resetNextUnitOfWork()首先从队列中取出第一个update对象。
 
 然后，我们把新的fiber赋给nextUnitOfWork,**这个fiber就是进行中的树的根节点**
 
-如果我们没有旧的根节点，stateNode就会作为DOM节点传给render()方法
+如果我们没有旧的根节点，stateNode就会作为DOM节点传给render()方法.update对象上的newProps就作为props。update的children属性上就有传给render的另一个参数elements。alternate是null.
+
+如果有旧的根节点，stateNode就是之前根节点上的DOM节点，如果newProps非null的话，newProps还是作为props，或者我们从之前的旧根节点上拷贝props，alternate就是旧根节点。
+
+我们现在有了进行中树的根节点，下面我们来创建剩余部分。
+
+![flow4](./img/flow4.png)
+
+```js
+function performUnitOfWork(wipFiber) {
+  beginWork(wipFiber);
+  if (wipFiber.child) {
+    return wipFiber.child;
+  }
+
+  // No child, we call completeWork until we find a sibling
+  let uow = wipFiber;
+  while (uow) {
+    completeWork(uow);
+    if (uow.sibling) {
+      // Sibling needs to beginWork
+      return uow.sibling;
+    }
+    uow = uow.parent;
+  }
+}
+```
+
+performUnitOfWork()遍历进行中的树。
+
+我们调用beginWork() -来创建fiber的一个子节点-然后返回第一个子节点，使它成为nextUnitOfWork。
+
+如果没有子节点，我们调用completeWork()并把兄弟节点作为nextUnitOfWork。
+
+如果没有兄弟节点，我们不断调用completeWork(),向上遍历父母节点，直到找到有兄弟节点的节点(这个兄弟节点会成为nextUnitOfWork)，这个过程可能会一直到根节点。
+
+多次调用performUnitOfWork()会向下为每个fiber的第一个子fiber创建子节点，直到它找到一个fiber没有子节点。然后向右移到兄弟节点做同样的事，然后向上到叔伯节点，重复一样的事。(为了加深理解，我们可以在[fiber-debugger](https://fiber-debugger.surge.sh)上渲染几个组件看看)
+
+![flow5](./img/flow5.png)
+
+```js
+function beginWork(wipFiber) {
+  if (wipFiber.tag == CLASS_COMPONENT) {
+    updateClassComponent(wipFiber);
+  } else {
+    updateHostComponent(wipFiber);
+  }
+}
+
+function updateHostComponent(wipFiber) {
+  if (!wipFiber.stateNode) {
+    wipFiber.stateNode = createDomElement(wipFiber);
+  }
+  const newChildElements = wipFiber.props.children;
+  reconcileChildrenArray(wipFiber, newChildElements);
+}
+
+function updateClassComponent(wipFiber) {
+  let instance = wipFiber.stateNode;
+  if (instance == null) {
+    // Call class constructor
+    instance = wipFiber.stateNode = createInstance(wipFiber);
+  } else if (wipFiber.props == instance.props && !wipFiber.partialState) {
+    // No need to render, clone children from last time
+    cloneChildFibers(wipFiber);
+    return;
+  }
+
+  instance.props = wipFiber.props;
+  instance.state = Object.assign({}, instance.state, wipFiber.partialState);
+  wipFiber.partialState = null;
+
+  const newChildElements = wipFiber.stateNode.render();
+  reconcileChildrenArray(wipFiber, newChildElements);
+}
+```
+
+beginWork()做两件事：
+
+- 如果没有stateNode,创建一个
+- 获得children组件并把它们传给reconcileChildrenArray()方法
+
+因为这两个都要知道组件的类型，我们把方法拆成两个：updateHostComponent()和updateClassComponent()
+
+updateHostComponent()处理host组件以及根组件。如果需要的话它创建一个新的DOM节点(单一的节点，没有子节点，也不插入Dom).**然后使用fiber的props上的子元素作为参数，调用reconcileChildrenArray().**
+
+updateClassComponent()处理类组件实例，如果需要，调用类组件的构造函数创建实例。**它也会更新实例的props和state，然后调用render()得到新的子节点**
+
+updateClassComponent()也会检测是否有必要调用render().这是个简单版的shouldComponentUpdate().如果发现不需要re-render,我们就把子树直接考给进行中的树，跳过调和。
+
+现在我们有了newChildElements,我们来为进行中的树创建子fibers
+
+![flow6](./img/flow6.png)
+
+这里是库的核心，这里就是随着进行中的树增长，我们确定在提交阶段dom做哪些修改。
+
+```js
+// Effect tags
+const PLACEMENT = 1;
+const DELETION = 2;
+const UPDATE = 3;
+
+function arrify(val) {
+  return val == null ? [] : Array.isArray(val) ? val : [val];
+}
+
+function reconcileChildrenArray(wipFiber, newChildElements) {
+  const elements = arrify(newChildElements);
+
+  let index = 0;
+  let oldFiber = wipFiber.alternate ? wipFiber.alternate.child : null;
+  let newFiber = null;
+  while (index < elements.length || oldFiber != null) {
+    const prevFiber = newFiber;
+    const element = index < elements.length && elements[index];
+    const sameType = oldFiber && element && element.type == oldFiber.type;
+
+    if (sameType) {
+      newFiber = {
+        type: oldFiber.type,
+        tag: oldFiber.tag,
+        stateNode: oldFiber.stateNode,
+        props: element.props,
+        parent: wipFiber,
+        alternate: oldFiber,
+        partialState: oldFiber.partialState,
+        effectTag: UPDATE
+      };
+    }
+
+    if (element && !sameType) {
+      newFiber = {
+        type: element.type,
+        tag:
+          typeof element.type === "string" ? HOST_COMPONENT : CLASS_COMPONENT,
+        props: element.props,
+        parent: wipFiber,
+        effectTag: PLACEMENT
+      };
+    }
+
+    if (oldFiber && !sameType) {
+      oldFiber.effectTag = DELETION;
+      wipFiber.effects = wipFiber.effects || [];
+      wipFiber.effects.push(oldFiber);
+    }
+
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
+
+    if (index == 0) {
+      wipFiber.child = newFiber;
+    } else if (prevFiber && element) {
+      prevFiber.sibling = newFiber;
+    }
+
+    index++;
+  }
+}
+```
+
+首先，我们知道newChildElements是个数组(不同于之前的调和算法，这里总是数组，这意味着我们可以在组件的render()方法里返回数组)
+
+然后，我们对比旧fiber树的子节点和新的元素(我们对比fiber和元素)。旧fiber树的子节点就是wip.alternate的子节点。新元素就是wipFiber.props.children或者wipFiber.stateNode.render()返回的。
+
+我们的调和算法通过匹配第一个旧fiber(wipFiber.alternate.child)和第一个子元素(elements[0]),第二个旧fiber(wipFiber.alternate.child.sibling)和第二个子元素(elements[1])，以此类推，每一个旧fiber-元素对：
+
+- 如果旧fiber和元素有一样的type,好消息，我们可以保留之前的stateNode.我们基于旧的创建一个新的fiber。我们添加 UPDATE的effectTag。然后我们把新的fiber添加到进行中的树。
+
+- 如果我们有一个元素和旧fiber的type不同，或者我们没有一个旧fiber(因为我们新的子元素比旧的子元素多)，我们根据元素中的信息创建一个新的fiber。需要注意的是这个新的fiber将没有alternate和stateNode(我们将在beginWork里创建stateNode)。这个fiber的effectTag就是PLACEMENT。
+
+- 如果旧fiber和元素有不同的type或者没有对应这个旧fiber的元素(因为我们旧的子元素比新的子元素多),我们给这个旧fiber标记DELETION。介于这个fiber不是进行中的树的一部分，我们需要把它加到wipFiber.effects,这样我们才不会失去跟踪。
+
+>和React不同的是我们没有用keys来做调和，这样如果子元素移动了位置我们就不知道了
+
+
+
+
+
