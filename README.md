@@ -2,7 +2,7 @@
 
 # build your own x 项目中文翻译
 
-## 为什么有这个项目
+## 为什么有这个项目？
 
 偶然发现一个很酷的项目:[build your own x](https://github.com/danistefanovic/build-your-own-x/blob/master/README.md)
 
@@ -10,6 +10,8 @@
 对于那些喜欢研究轮子的，这个系列简直太棒！
 
 因为本人目前是一名前端，所以先从前端框架入手。
+
+线上地址： https://johnzhu12.github.io/build-your-own-x-chinese/
 
 - 前端框架
   - [创建你自己的 react](./前端框架/创建你自己的react/创建你自己的react.md)

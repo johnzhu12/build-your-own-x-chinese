@@ -1,0 +1,22 @@
+{
+  "name": "build-your-own-x-chinese",
+  "version": "1.0.0",
+  "description": "[TOC]",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "gitbook build ./ ./docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnzhu12/build-your-own-x-chinese.git"
+  },
+  "author": "johnzhu",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/johnzhu12/build-your-own-x-chinese/issues"
+  },
+  "homepage": "https://github.com/johnzhu12/build-your-own-x-chinese#readme"
+}
