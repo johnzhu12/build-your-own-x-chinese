@@ -11,7 +11,7 @@
 
 因为本人目前是一名前端，所以先从前端框架入手。
 
-线上地址： https://johnzhu12.github.io/build-your-own-x-chinese/
+gitbook 线上地址： https://johnzhu12.github.io/build-your-own-x-chinese/
 
 - 前端框架
   - [创建你自己的 react](./前端框架/创建你自己的react/创建你自己的react.md)
