@@ -9,6 +9,9 @@
   "scripts": {
     "build": "gitbook build ./ ./docs"
   },
+  "pre-commit": [
+    "build"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/johnzhu12/build-your-own-x-chinese.git"
@@ -18,5 +21,9 @@
   "bugs": {
     "url": "https://github.com/johnzhu12/build-your-own-x-chinese/issues"
   },
-  "homepage": "https://github.com/johnzhu12/build-your-own-x-chinese#readme"
+  "homepage": "https://github.com/johnzhu12/build-your-own-x-chinese#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "pre-commit": "^1.2.2"
+  }
 }

@@ -19,3 +19,6 @@ gitbook 线上地址： https://johnzhu12.github.io/build-your-own-x-chinese/
   - [JSX 什么鬼(一起来写一个 JSX 渲染器)](./前端框架/JSXWTH.md)
   - [Redux:从 0 创建 Store](./前端框架/Redux:从0创建Store.md)
   - [我们来写个 redux](./前端框架/我们来写个redux.md)
+- 未分类
+  - [javascript:通过从零创建一个 promise 来学习 js](./未分类/js-learnjsbycreatepromise.md)
+  - [javascript:从零创建 promise(TDD 方式)](./未分类/js-tdd-promise.md)
